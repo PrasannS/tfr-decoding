@@ -43,7 +43,7 @@ def baseline_beam_search(gen_model, inp_ids, tokenizer, args):
 
     heap.append(starter) # kick off decoding
     # keep on decoding until we hit ends for everything
-    while len(finished_hyps)<bwidth:
+    while len(finished_hyps)<args['beam_size']:
         # can't go over max_len
         if len(heap[0].prev)+1 == args["max_len"]:
             finished_hyps.extend(heap)
