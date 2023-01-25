@@ -73,7 +73,7 @@ class DecodeNode(ABC):
 
     # TODO re-write prev code to be more memory efficient / recursive
     def get_ending_str(self, tokenizer):
-        toks = [p.token_idx for p in self.prev]+self.token_idx
+        toks = [p.token_idx for p in self.prev]+[self.token_idx]
         return tokenizer.decode(toks)
         
     # TODO assumes no recomb
@@ -81,7 +81,7 @@ class DecodeNode(ABC):
         return self.score+sum(self.prev_score)
 
     def get_score_avg(self):
-        return mean(self.score+self.prev_score)
+        return mean([self.score]+self.prev_score)
 
     def __repr__(self) -> str:
         return self.get_tokens_str()

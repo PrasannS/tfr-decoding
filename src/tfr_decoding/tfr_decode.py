@@ -9,11 +9,11 @@ import numpy as np
 # return top args.beam_width possibilities given inputs
 def decode_step(node: DecodeNode, gen_model, src_inp_ids, tokenizer, args):
     # get previous decodings based on stuff stored in node
-    dec_inp_ids = [n.token_idx for n in node.prev]
+    dec_inp_ids = torch.tensor([n.token_idx for n in node.prev]+[node.token_idx])
     output_prob, _, _ = run_inference_step(
             gen_model, src_inp_ids, decoder_input_ids=dec_inp_ids, device=src_inp_ids.device, output_dec_hid=False)
     # get the top k options by token index
-    values, indices = torch.topk(output_prob, k=args.beam_size)
+    values, indices = torch.topk(output_prob, k=args["beam_size"])
     values = values[0].tolist()
     indices = indices[0].tolist()
 
@@ -21,14 +21,14 @@ def decode_step(node: DecodeNode, gen_model, src_inp_ids, tokenizer, args):
     top_nodes = []
     for i in range(len(values)):
         top_nodes.append(DecodeNode(prob=values[i], token_idx=indices[i], 
-                prev=node.prev+node, prev_score=node.prev_score+node.score))
+                prev=node.prev+[node], prev_score=node.prev_score+[node.score]))
     return top_nodes
 
 def baseline_beam_search(gen_model, inp_ids, tokenizer, args):
-    bwidth = args.beam_width
+    bwidth = args["beam_size"]
     heap = [] # nodes to explore go here
     finished_hyps = [] # once a cand is done, put here
-    dec_prefix = args.dec_prefix # decoding to get us started off
+    dec_prefix = args['dec_prefix'] # decoding to get us started off
 
     # set up decoding from prefix
     last = None
@@ -41,18 +41,18 @@ def baseline_beam_search(gen_model, inp_ids, tokenizer, args):
                                 prev=[], prev_score=[])
             last = starter
 
-    heap.append((last.prob, last)) # kick off decoding
+    heap.append(starter) # kick off decoding
     # keep on decoding until we hit ends for everything
     while len(finished_hyps)<bwidth:
         # can't go over max_len
-        if len(heap[0].prev)+1 == args.max_len:
+        if len(heap[0].prev)+1 == args["max_len"]:
             finished_hyps.extend(heap)
             break
         newnodes = []
         # keep track of all nodes
         for i in range(len(heap)):
             cur = heap.pop()
-            if cur.tok_idx == args.eos:
+            if cur.token_idx == tokenizer.eos_token_id and len(cur.prev)>2:
                 cur.finished = True
                 finished_hyps.append(cur)
                 bwidth-=1 # continue to expand only unfinished beams
@@ -71,7 +71,7 @@ def baseline_beam_search(gen_model, inp_ids, tokenizer, args):
 # kick off baseline-decoding, given a gen model
 def run_baseline_decoding(gen_model, source, tokenizer, args):
     input_ids = tokenizer(
-            source, return_tensors="pt").input_ids.to(args.device)
+            source, return_tensors="pt").input_ids.to(args['device'])
     # TODO record dec_calls for stats purposes
     results = baseline_beam_search(gen_model, input_ids, tokenizer, args)
     end_strs = [r.get_ending_str(tokenizer) for r in results]
@@ -80,7 +80,7 @@ def run_baseline_decoding(gen_model, source, tokenizer, args):
 # kick off tfr-decoding, given a gen model, tfr
 def run_tfr_decoding(gen_model, tfr_model, source, tokenizer, args):
     input_ids = tokenizer(
-            source, return_tensors="pt").input_ids.to(args.device)
-    max_len = args.max_len # don't go over this
+            source, return_tensors="pt").input_ids.to(args['device'])
+    max_len = args['max_len'] # don't go over this
     dec_calls = 0 # track number of decoding calls
 

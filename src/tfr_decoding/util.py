@@ -3,19 +3,15 @@ import torch
 @torch.no_grad()
 def run_inference_step(model, input_ids, attention_mask=None, decoder_input_ids=None, targets=None, device='cuda:1', output_dec_hid=False, T=1):
     # we're using a standard setting
-    if type(input_ids) is not dict:
-        decoder_input_ids = decoder_input_ids.to(device)
-        input_ids = input_ids.to(device)
-        if attention_mask is not None:
-            attention_mask = attention_mask.to(device)
-        assert decoder_input_ids.size()[0] == input_ids.size()[0]
+    decoder_input_ids = decoder_input_ids.unsqueeze(0).to(device)
+    input_ids = input_ids.to(device)
+    if attention_mask is not None:
+        attention_mask = attention_mask.to(device)
 
-        model_inputs = {"input_ids": input_ids,
-                        "attention_mask": attention_mask,
-                        "decoder_input_ids": decoder_input_ids,
-                        }
-    else: # we're doing T5 for table-to-text
-        input_ids['decoder_input_ids'] = decoder_input_ids.to(device)
+    model_inputs = {"input_ids": input_ids,
+                    "attention_mask": attention_mask,
+                    "decoder_input_ids": decoder_input_ids,
+                    }
 
     outputs = model(**model_inputs,
                     output_hidden_states=output_dec_hid,
