@@ -1,5 +1,6 @@
 from src.tfr_decoding.tfr_decode import run_baseline_decoding
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+from src.tfr_decoding.custom_bs import beam_search
 import logging
 import pandas as pd
 
@@ -21,7 +22,7 @@ def load_model(setting, device="cuda:0"):
         dec_prefix = [tokenizer.eos_token_id] # TODO Jiacheng had this as BOS
     return model, tokenizer, dataset, dec_prefix
 
-def run_hf_baseline(mod, tok, src, args):
+def run_hf_baseline(mod, tok, src, args, custom=False):
     inps = tok([src], return_tensors="pt").to(args["device"])
     outputs = mod.generate(**inps, max_new_tokens=args["max_len"], 
             return_dict_in_generate=True, output_scores=True,
@@ -32,6 +33,11 @@ def run_hf_baseline(mod, tok, src, args):
 if __name__=="__main__":
     # get model, tokenizer
     mod, tok, dset, dec_pref = load_model("xsum", "cuda:0")
+
+    # manually override to insert our beam_search method 
+    mod.beam_search = beam_search.__get__(mod)
+
+    # TODO will need to insert TFR model for use as well
 
     # have some input string
     source, ref = list(dset)[0]
@@ -45,6 +51,8 @@ if __name__=="__main__":
     }
 
     # run algorithm / cross fingers
-    endnodes, predicted = run_baseline_decoding(mod, source, tok, args)
+    base = run_hf_baseline(mod, tok, source, args, False)
+    # our goal is for this to match
+    preds = run_hf_baseline(mod, tok, source, args, True)
     
-    print(predicted)
+    print(preds)
