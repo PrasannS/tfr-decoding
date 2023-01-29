@@ -59,6 +59,9 @@ def beam_search(
         print("Using TFR Rerank Beam Search")
 
         
+        TFR_INTERV = self.tfr_interv
+        TFR_BEAMS = self.tfr_beams
+        
         # init values
         logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
         stopping_criteria = stopping_criteria if stopping_criteria is not None else StoppingCriteriaList()
@@ -99,8 +102,12 @@ def beam_search(
 
         batch_beam_size, cur_len = input_ids.shape
 
-        # TODO hardcode noun input for now, TODO batch flexibility?
-        toked_inp = self.tokenizer(["noun"]*num_beams, return_tensors="pt").to(self.device)
+        # TODO do a less janky way to use source
+        if self.no_source:
+            # TODO hardcode noun input for now, TODO batch flexibility?
+            toked_inp = self.tfr_tok(["noun"]*num_beams, return_tensors="pt").to(self.device)
+        else:
+            toked_inp = self.tfr_tok([self.source_str]*num_beams, return_tensors="pt", padding=True, truncation=True).to(self.device)
 
         assert (
             num_beams * batch_size == batch_beam_size
@@ -193,28 +200,34 @@ def beam_search(
             # get new input ids 
             input_ids = torch.cat([input_ids[beam_idx, :], beam_next_tokens.unsqueeze(-1)], dim=-1)
 
-            TFR_INTERV = 5
-
+            
+            # DO re-scoring with TFR
             # every certain number of tokens, choose top N scoring TFR paths to continue
             if len(input_ids[0])%TFR_INTERV==0:
+                # do tokenizer conversion for TFR
+                inpstrs = self.tokenizer.batch_decode(input_ids, skip_special_tokens=True)
+                tfr_ids = self.tfr_tok(inpstrs, return_tensors="pt", padding=True, truncation=True).to(self.device)
                 
                 # TODO validate, add in tfr scoring, get thing with best result
                 tfrouts = torch.sum(self.tfr.forward(
                     src_input_ids=toked_inp.input_ids,
                     src_attention_mask=toked_inp.attention_mask,
-                    mt_input_ids=input_ids,
+                    mt_input_ids=tfr_ids.input_ids,
                     mt_pos_ids=None,
-                    mt_attention_mask=torch.ones_like(input_ids),
+                    mt_attention_mask=tfr_ids.attention_mask,
                 )['score'], 1)
-                N = 1 # TODO make this a parameter
                 tfr_scores, tfr_inds = torch.topk(
-                    tfrouts, N, dim=0
+                    tfrouts, TFR_BEAMS, dim=0
                 )
-                input_ids = torch.index_select(input_ids, 0, tfr_inds[0]).expand(input_ids.shape).clone()
-                beam_idx = torch.index_select(beam_idx, 0, tfr_inds[0]).expand(beam_idx.shape).clone()
-                beam_scores = torch.index_select(beam_scores, 0, tfr_inds[0]).expand(beam_scores.shape).clone()
+                tmpinps = torch.index_select(input_ids, 0, tfr_inds[0]) #.expand(input_ids.shape).clone()
+                tmpidxs = torch.index_select(beam_idx, 0, tfr_inds[0]) #.expand(beam_idx.shape).clone()
+                tmpscores = torch.index_select(beam_scores, 0, tfr_inds[0]) #[].expand(beam_scores.shape).clone()
+                input_ids[:TFR_BEAMS, :] = tmpinps
+                beam_idx[:TFR_BEAMS] = tmpidxs
+                beam_scores[:TFR_BEAMS] = tmpscores
+
                 # only get 1 thing at a time
-                beam_scores[1:] = -1e9
+                beam_scores[TFR_BEAMS:] = -1e9
             model_kwargs = self._update_model_kwargs_for_generation(
                 outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
             )
