@@ -56,7 +56,9 @@ def beam_search(
         **model_kwargs,
     ) -> Union[BeamSearchOutput, torch.LongTensor]:
         
-        print("Hi I'm using this version instead!")
+        print("Using TFR Rerank Beam Search")
+
+        
         # init values
         logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
         stopping_criteria = stopping_criteria if stopping_criteria is not None else StoppingCriteriaList()
@@ -97,11 +99,15 @@ def beam_search(
 
         batch_beam_size, cur_len = input_ids.shape
 
+        # TODO hardcode noun input for now, TODO batch flexibility?
+        toked_inp = self.tokenizer(["noun"]*num_beams, return_tensors="pt").to(self.device)
+
         assert (
             num_beams * batch_size == batch_beam_size
         ), f"Batch dimension of `input_ids` should be {num_beams * batch_size}, but is {batch_beam_size}."
 
         beam_scores = torch.zeros((batch_size, num_beams), dtype=torch.float, device=input_ids.device)
+        # destroy extra scores so that no repeats happen
         beam_scores[:, 1:] = -1e9
         beam_scores = beam_scores.view((batch_size * num_beams,))
 
@@ -184,8 +190,31 @@ def beam_search(
             beam_next_tokens = beam_outputs["next_beam_tokens"]
             beam_idx = beam_outputs["next_beam_indices"]
 
+            # get new input ids 
             input_ids = torch.cat([input_ids[beam_idx, :], beam_next_tokens.unsqueeze(-1)], dim=-1)
 
+            TFR_INTERV = 5
+
+            # every certain number of tokens, choose top N scoring TFR paths to continue
+            if len(input_ids[0])%TFR_INTERV==0:
+                
+                # TODO validate, add in tfr scoring, get thing with best result
+                tfrouts = torch.sum(self.tfr.forward(
+                    src_input_ids=toked_inp.input_ids,
+                    src_attention_mask=toked_inp.attention_mask,
+                    mt_input_ids=input_ids,
+                    mt_pos_ids=None,
+                    mt_attention_mask=torch.ones_like(input_ids),
+                )['score'], 1)
+                N = 1 # TODO make this a parameter
+                tfr_scores, tfr_inds = torch.topk(
+                    tfrouts, N, dim=0
+                )
+                input_ids = torch.index_select(input_ids, 0, tfr_inds[0]).expand(input_ids.shape).clone()
+                beam_idx = torch.index_select(beam_idx, 0, tfr_inds[0]).expand(beam_idx.shape).clone()
+                beam_scores = torch.index_select(beam_scores, 0, tfr_inds[0]).expand(beam_scores.shape).clone()
+                # only get 1 thing at a time
+                beam_scores[1:] = -1e9
             model_kwargs = self._update_model_kwargs_for_generation(
                 outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
             )
@@ -200,6 +229,8 @@ def beam_search(
                     break
                 else:
                     this_peer_finished = True
+
+        # done with traversal
 
         sequence_outputs = beam_scorer.finalize(
             input_ids,

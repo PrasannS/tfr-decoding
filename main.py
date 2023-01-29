@@ -1,8 +1,10 @@
-from src.tfr_decoding.tfr_decode import run_baseline_decoding
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 from src.tfr_decoding.custom_bs import beam_search
+from src.models.models import load_from_checkpoint as lfc
+
 import logging
 import pandas as pd
+import torch
 
 def load_model(setting, device="cuda:0"):
     if setting == "xsum":
@@ -29,13 +31,34 @@ def run_hf_baseline(mod, tok, src, args, custom=False):
             num_beams=args["beam_size"], num_return_sequences=args["beam_size"])
     return tok.batch_decode(outputs.sequences)
     
+# get token level scores from model, given hypothesis and input source
+def get_hyp_sco(inphyp, inpsrc, tok, dev, model):
+
+    # calculate inputs
+    tokens = tok(inphyp, return_tensors='pt', truncation=True).to(dev)
+    tokens = tokens.input_ids
+    positionids = None
+    toked_inp = tok([inpsrc], return_tensors="pt").to(dev)
+    # get causal mask
+    tmpmask = torch.tril(torch.ones(len(tokens[0]), len(tokens[0]))).unsqueeze(0).to(dev)
+    # run through model
+    predout = model(toked_inp.input_ids, toked_inp.attention_mask, tokens, positionids, \
+        tmpmask)
+    return predout['score']
 
 if __name__=="__main__":
     # get model, tokenizer
     mod, tok, dset, dec_pref = load_model("xsum", "cuda:0")
 
+    # get eval version of model (scores given separately)
+    # TODO make things efficient to minimize re-calculation of stuff
+    tfrmodel = lfc("noun", True).to("cuda:0")
+    tfrmodel.eval()
+
     # manually override to insert our beam_search method 
     mod.beam_search = beam_search.__get__(mod)
+    mod.tfr = tfrmodel
+    mod.tokenizer = tok
 
     # TODO will need to insert TFR model for use as well
 
