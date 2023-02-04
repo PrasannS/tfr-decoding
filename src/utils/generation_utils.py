@@ -72,6 +72,7 @@ def generate_cands(mod, tok, src, args):
 def tfr_decode_ind(md, tk, src, args):
     md.tfr_interv = args['tfr_interv']
     md.tfr_beams = args['tfr_beams']
+    md.weightfunc = args['weightfunc']
     md.source_str = src # TODO do something less janky
     preds = generate_cands(md, tk, src, args)
     

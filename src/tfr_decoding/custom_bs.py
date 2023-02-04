@@ -216,12 +216,13 @@ def beam_search(
                     mt_pos_ids=None,
                     mt_attention_mask=tfr_ids.attention_mask,
                 )['score'], 1)
+                newscos = tfrouts[:, 0]+self.weightfunc(len(input_ids[0]))*beam_scores
                 tfr_scores, tfr_inds = torch.topk(
-                    tfrouts, TFR_BEAMS, dim=0
+                    newscos, TFR_BEAMS, dim=0
                 )
-                tmpinps = torch.index_select(input_ids, 0, tfr_inds[0]) #.expand(input_ids.shape).clone()
-                tmpidxs = torch.index_select(beam_idx, 0, tfr_inds[0]) #.expand(beam_idx.shape).clone()
-                tmpscores = torch.index_select(beam_scores, 0, tfr_inds[0]) #[].expand(beam_scores.shape).clone()
+                tmpinps = torch.index_select(input_ids, 0, tfr_inds) #.expand(input_ids.shape).clone()
+                tmpidxs = torch.index_select(beam_idx, 0, tfr_inds) #.expand(beam_idx.shape).clone()
+                tmpscores = torch.index_select(beam_scores, 0, tfr_inds) #[].expand(beam_scores.shape).clone()
                 input_ids[:TFR_BEAMS, :] = tmpinps
                 beam_idx[:TFR_BEAMS] = tmpidxs
                 beam_scores[:TFR_BEAMS] = tmpscores

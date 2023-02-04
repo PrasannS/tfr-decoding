@@ -19,8 +19,9 @@ if __name__=="__main__":
         "device":'cuda:2',
         "beam_size":12,
         "dec_prefix":dec_pref,
-        "tfr_interv":6,
-        "tfr_beams":2
+        "msco_ratio":1,
+        "tfr_interv":5,
+        "tfr_beams":6
     })
 
     metrics_mapping("pqe", allcands)
