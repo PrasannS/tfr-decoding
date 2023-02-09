@@ -465,8 +465,14 @@ def nlp_quickparse(inp, nlp):
     return result
 
 BASEPATH = "/mnt/data1/prasann/latticegen/lattice-generation/parent_explore/stagewise_finetune/"
-table_path = "parent_master/webnlg.jl"
-ref_paths = ["pos/test.target_eval", "pos/test.target2_eval", "pos/test.target3_eval"]
+traingen = False
+if traingen:
+    table_path = "parent_master/webnlgtrain.jl"
+    ref_paths = ["pos/traindata/test.target"]
+else:
+    table_path = "parent_master/webnlg.jl"
+    ref_paths = ["pos/test.target_eval", "pos/test.target2_eval", "pos/test.target3_eval"]
+
 # method that takes in a dataframe of hypotheses (should have references)
 # correctly maps stuff to the right references and generates parent scores
 def parent_score_df(hypdfs, cache_name=None):
@@ -492,15 +498,17 @@ def parent_score_df(hypdfs, cache_name=None):
         parent_df = pd.DataFrame()
         parent_df['tab_inp'] = tables
         parent_df['ref'] = references[0]
-        parent_df['ref2'] = references[1]
-        parent_df['ref3'] = references[2]
+        if len(references)>1:
+            parent_df['ref2'] = references[1]
+            parent_df['ref3'] = references[2]
 
         print("references loaded")
 
         # do parsing of stuff.  # 2) nlp tokenize everything 
         parent_df['r1p'] = nlp_quickparse(list(parent_df['ref']), nlp)
-        parent_df['r2p'] = nlp_quickparse(list(parent_df['ref2']), nlp)
-        parent_df['r3p'] = nlp_quickparse(list(parent_df['ref3']), nlp)
+        if len(references)>1:
+            parent_df['r2p'] = nlp_quickparse(list(parent_df['ref2']), nlp)
+            parent_df['r3p'] = nlp_quickparse(list(parent_df['ref3']), nlp)
         """
         parent_df.apply(lambda x: nlp_parse(x.ref, nlp), 1)
         parent_df['r2p'] = parent_df.apply(lambda x: nlp_parse(x.ref2, nlp), 1)
@@ -524,10 +532,14 @@ def parent_score_df(hypdfs, cache_name=None):
     if cache_name is not None:
         merged.to_csv(BASEPATH+cache_name)
     print("hyps processed") 
-    refinps = [[], [], []]
+    if len(references)>1:
+        refinps = [[], [], []]
+    else:
+        refinps = [[]]
     refinps[0].extend(list(merged['r1p']))
-    refinps[1].extend(list(merged['r2p']))
-    refinps[2].extend(list(merged['r3p']))
+    if len(references)>1:
+        refinps[1].extend(list(merged['r2p']))
+        refinps[2].extend(list(merged['r3p']))
 
     # 3) score with parent
     precisions, recalls, f_scores = parent(

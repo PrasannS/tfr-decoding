@@ -1,2 +1,5 @@
 output/
 .ipynb_checkpoints/
+*.out
+*.csv
+tmp_data/

@@ -1,12 +1,12 @@
 import logging
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, BartForConditionalGeneration
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, BartForConditionalGeneration, T5ForConditionalGeneration
 import pandas as pd
 import torch
 from src.tfr_decoding.custom_bs import beam_search
 from src.models.models import load_from_checkpoint as lfc
 import time
 
-def load_model(setting, tfrdecode=True, device="cuda:2"):
+def load_model(setting, tfrdecode=True, device="cuda:2", train=False):
     if setting == "noun":
         logging.info('Loading xsum model')
         # load up model
@@ -23,7 +23,12 @@ def load_model(setting, tfrdecode=True, device="cuda:2"):
         dataset = zip(slines, tlines)
         dec_prefix = [tokenizer.eos_token_id] # TODO Jiacheng had this as BOS
     if setting == "table2text":
-        tokenizer = AutoTokenizer.from_pretrained("facebook/bart-base")
+        usebart=True
+        if usebart:
+            tokenizer = AutoTokenizer.from_pretrained("facebook/bart-base")
+        else:
+            tokenizer = AutoTokenizer.from_pretrained("t5-large")
+
         new_tokens = ['<H>', '<R>', '<T>']
         new_tokens_vocab = {}
         new_tokens_vocab['additional_special_tokens'] = []
@@ -31,21 +36,35 @@ def load_model(setting, tfrdecode=True, device="cuda:2"):
             new_tokens_vocab['additional_special_tokens'].append(t)
         num_added_toks = tokenizer.add_special_tokens(new_tokens_vocab)
         # first get cond gen model
-        ckpt = torch.load("/mnt/data1/prasann/latticegen/lattice-generation/parent_explore/plms-graph2text/webnlg-bart-base.ckpt")
+        if usebart:
+            ckpt = torch.load("/mnt/data1/prasann/latticegen/lattice-generation/parent_explore/plms-graph2text/webnlg-bart-base.ckpt")
+        else:
+            ckpt = torch.load("/mnt/data1/prasann/latticegen/lattice-generation/parent_explore/plms-graph2text/webnlg-t5-large.ckpt")          
         state_dict = ckpt['state_dict']
         # make weight keys compatible 
         for key in list(state_dict.keys()):
             if key[:len("model.")]=="model.":
                 state_dict[key[len("model."):]] = state_dict.pop(key)
-        model = BartForConditionalGeneration.from_pretrained(
-            "facebook/bart-base", state_dict=ckpt['state_dict'], vocab_size=50268
-        ).to(device)
-        datadf = pd.read_csv("/mnt/data1/prasann/latticegen/lattice-generation/parent_explore/stagewise_finetune/parent_master/wnlg_testset_bart.csv")
+        if usebart:
+            model = BartForConditionalGeneration.from_pretrained(
+                "facebook/bart-base", state_dict=ckpt['state_dict'], vocab_size=50268
+            ).to(device)
+        else:
+            model = T5ForConditionalGeneration.from_pretrained(
+                "t5-large", state_dict=ckpt['state_dict'], vocab_size=tokenizer.vocab_size+num_added_toks
+            ).to(device)
+        model.eval()
+        # dataset to train stuff
+        if train:
+            datadf = pd.read_csv("/mnt/data1/prasann/tfr-decoding/webnlg_train.csv")
+            tlines = list(datadf['reference'])
+        else:
+            datadf = pd.read_csv("/mnt/data1/prasann/latticegen/lattice-generation/parent_explore/stagewise_finetune/parent_master/wnlg_testset_bart.csv")
+            tlines = list(datadf['ref'])
         slines = list(datadf['src'])
-        tlines = list(datadf['ref'])
+        
         dataset = zip(slines, tlines)
-        dec_prefix = [tokenizer.eos_token_id]
-    
+        dec_prefix = [model.config.decoder_start_token_id]
     
     # do necessary monkey patching
     if tfrdecode:
@@ -66,7 +85,7 @@ def generate_cands(mod, tok, src, args):
     outputs = mod.generate(**inps, max_new_tokens=args["max_len"], 
             return_dict_in_generate=True, output_scores=True,
             num_beams=args["beam_size"], num_return_sequences=args["beam_size"])
-    return tok.batch_decode(outputs.sequences, skip_special_tokens=True)
+    return tok.batch_decode(outputs.sequences, skip_special_tokens=True), outputs.sequences_scores
 
 # TODO incorporate source for source input settings (anything not NOUN-TFR)
 def tfr_decode_ind(md, tk, src, args):
@@ -74,9 +93,9 @@ def tfr_decode_ind(md, tk, src, args):
     md.tfr_beams = args['tfr_beams']
     md.weightfunc = args['weightfunc']
     md.source_str = src # TODO do something less janky
-    preds = generate_cands(md, tk, src, args)
+    preds, scos = generate_cands(md, tk, src, args)
     
-    return preds
+    return preds, scos
 
 LOGSTEPS = 20
 def all_tfr_decode(mod, tok, dset, args):
@@ -86,13 +105,16 @@ def all_tfr_decode(mod, tok, dset, args):
     for ex in dset:
         if ind%LOGSTEPS==0:
             print(ind)
-
-        cands = tfr_decode_ind(mod, tok, ex[0], args)
-        for c in cands:
+        try:
+            cands, scores = tfr_decode_ind(mod, tok, ex[0], args)
+        except:
+            print("decoding failed")
+        for c in range(len(scores)):
             res.append({
                 'ref':ex[1],
-                'hyp':c,
-                'src':ex[0]
+                'hyp':cands[c],
+                'src':ex[0],
+                'modsco':scores[c]
             })
         ind+=1
     timetot = time.time()-start

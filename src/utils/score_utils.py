@@ -51,7 +51,7 @@ def get_comstyle_correct(srcs, hyps, model, device, bsize = 8):
     ind = 0 
     LOG_STEPS = 20
     while ind<maxl:
-        if (ind/32)%LOG_STEPS == 0:
+        if (ind/8)%LOG_STEPS == 0:
             print(100*(ind/maxl),"%")
         sco = batch_hyp_sco(srcs[ind:ind+bsize], hyps[ind:ind+bsize], args)
         # get all appropriate scores
@@ -99,7 +99,7 @@ def get_mbart_nllsco(inpu, outpu, inptok, labtok, mod, dev):
     return losses
 
 def rescore_cands(dset, hyplist, srclist):
-    device = "cuda:3" if torch.cuda.is_available() else "cpu"
+    device = "cuda:2" if torch.cuda.is_available() else "cpu"
     if "de" in dset:
         mname = "facebook/mbart-large-50-one-to-many-mmt"
         src_l = "en_XX"
@@ -212,7 +212,8 @@ DSET_CHKS = {
     "copcqe":"/mnt/data1/prasann/latticegen/lattice-generation/COMET/lightning_logs/version_38/checkpoints/epoch=3-step=140000.ckpt",
     "dupcqe":"/mnt/data1/prasann/latticegen/lattice-generation/COMET/lightning_logs/version_43/checkpoints/epoch=3-step=140000.ckpt",
     "utnoun":"/mnt/data1/prasann/latticegen/lattice-generation/COMET/lightning_logs/version_44/checkpoints/epoch=9-step=40000.ckpt",
-    "parentqe": "/mnt/data1/prasann/latticegen/lattice-generation/COMET/lightning_logs/version_57/checkpoints/epoch=1-step=50000.ckpt"
+    "parentqe": "/mnt/data1/prasann/latticegen/lattice-generation/COMET/lightning_logs/version_57/checkpoints/epoch=1-step=50000.ckpt",
+    "prefpqe": "/mnt/data1/prasann/latticegen/lattice-generation/COMET/lightning_logs/version_62/checkpoints/epoch=4-step=150000.ckpt"
 }
 
 def get_posunique(sentence, noun):
@@ -310,6 +311,8 @@ def metrics_mapping (metric, tset, lpair='en-de', savefile="tmp.csv"):
         tset[metric] = get_scores_auto(hyps, srcs, refs, "dupcqe", "comstyle")
     elif metric=='pqe':
         tset[metric] = get_scores_auto(hyps, srcs, refs, "parentqe", "comstyle")
+    elif metric=='prefpqe':
+        tset[metric] = get_scores_auto(hyps, srcs, refs, "prefpqe", "comstyle")
     elif metric=='parent':
         if "precision" in tset.keys():
             print("already got it")
