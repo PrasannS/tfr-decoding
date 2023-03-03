@@ -6,7 +6,7 @@ from src.tfr_decoding.custom_bs import beam_search
 from src.models.models import load_from_checkpoint as lfc
 import time
 
-def load_model(setting, tfrdecode=True, device="cuda:2", train=False):
+def load_model(setting, tfrdecode=True, device="cuda:1", train=False):
     if setting == "noun":
         logging.info('Loading xsum model')
         # load up model
@@ -23,7 +23,7 @@ def load_model(setting, tfrdecode=True, device="cuda:2", train=False):
         dataset = zip(slines, tlines)
         dec_prefix = [tokenizer.eos_token_id] # TODO Jiacheng had this as BOS
     if setting == "table2text":
-        usebart=True
+        usebart=False
         if usebart:
             tokenizer = AutoTokenizer.from_pretrained("facebook/bart-base")
         else:
@@ -105,10 +105,10 @@ def all_tfr_decode(mod, tok, dset, args):
     for ex in dset:
         if ind%LOGSTEPS==0:
             print(ind)
-        try:
-            cands, scores = tfr_decode_ind(mod, tok, ex[0], args)
-        except:
-            print("decoding failed")
+        #try:
+        cands, scores = tfr_decode_ind(mod, tok, ex[0], args)
+        #except:
+            #print("decoding failed")
         for c in range(len(scores)):
             res.append({
                 'ref':ex[1],

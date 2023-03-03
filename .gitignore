@@ -3,3 +3,5 @@ output/
 *.out
 *.csv
 tmp_data/
+Topical-Chat/
+UniEval/

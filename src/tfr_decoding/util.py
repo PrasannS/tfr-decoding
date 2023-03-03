@@ -1,7 +1,7 @@
 import torch
 
 @torch.no_grad()
-def run_inference_step(model, input_ids, attention_mask=None, decoder_input_ids=None, targets=None, device='cuda:2', output_dec_hid=False, T=1):
+def run_inference_step(model, input_ids, attention_mask=None, decoder_input_ids=None, targets=None, device='cuda:1', output_dec_hid=False, T=1):
     # we're using a standard setting
     decoder_input_ids = decoder_input_ids.unsqueeze(0).to(device)
     input_ids = input_ids.to(device)
