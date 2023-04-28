@@ -7,3 +7,8 @@ Topical-Chat/
 UniEval/
 FaithDial/
 UnifiedSKG/
+exploring-T5/
+lightning_logs
+logs/
+__pycache__
+.vscode

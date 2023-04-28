@@ -23,7 +23,7 @@ from torch.nn import functional as F
 import torch.distributed as dist
 from torch import nn
 from transformers.generation.beam_search import BeamScorer, BeamSearchScorer
-from transformers.pytorch_utils import torch_int_div
+#from transformers.pytorch_utils import torch_int_div
 
 from transformers.generation.logits_process import (
     LogitsProcessorList,
@@ -199,9 +199,10 @@ def beam_search(
                 next_token_scores, 2 * num_beams, dim=1, largest=True, sorted=True
             )
 
-            next_indices = torch_int_div(next_tokens, vocab_size)
+            next_indices = torch.div(next_tokens, vocab_size)
             next_tokens = next_tokens % vocab_size
 
+            print("using buggy code")
             # stateless
             beam_outputs = beam_scorer.process(
                 input_ids,

@@ -10,12 +10,10 @@ def construct_prompt(row):
     otemplate = \
 """
 The system will write a detailed and long post to respond to the user's question. Explain like the user is five years old. 
-
 Question: """
     template = \
 """
 Give a lengthy, detailed response. 
-
 Question: """
     inp = template+row['history']+"\n Detailed Response:"
     
@@ -274,7 +272,7 @@ def dset_randsamp(datadf, tok, mod, stmtok, stmshp, rchoose, tsamps, temp):
     allvals = []
     for i in range(len(datadf)):
         # get initial sample to go off of
-        prompt, orig_os, orig_scos, nav, oav, obests, oavgs, nb, ob, stats = sampfrominp(datadf, tok, mod, stmtok, stmshp, i, 0, None, [0.5, 0], rchoose, tsamps, temp)
+        prompt, orig_os, orig_scos, nav, oav, obests, oavgs, nb, ob, stats = sampfrominp(datadf, tok, mod, stmtok, stmshp, i, 0, None, [2], [rchoose[0]], [tsamps[0]], temp)
         allvals.append({
             'inp':prompt,
             'hyps':orig_os[0],
@@ -284,32 +282,29 @@ def dset_randsamp(datadf, tok, mod, stmtok, stmshp, rchoose, tsamps, temp):
             "pref":0
         })
         # take a random hyp
-        bscoind = random.randint(0, len(orig_scos[0]))
+        bscoind = random.randint(0, len(orig_scos[0])-1)
         # take len of best path in initial sample, we'll resample several times from here
         bhyplen = len(tok(orig_os[0][bscoind]).input_ids) 
+        j = random.randint(3, bhyplen-1)
         inps = {
             'allhyps':[[orig_os[0][bscoind]]*tsamps[0]],
             'allscos':[orig_scos[0]]
         }
-        for j in range(3, bhyplen):
-            # only do resample every 3 tokens
-            if j%3==0:
-                prompt, orig_os, orig_scos, nav, oav, obests, oavgs, nb, ob, stats = sampfrominp(datadf, tok, mod, stmtok, stmshp, i, 0, inps, [j, -1], rchoose, tsamps, temp)
-                allvals.append({
-                    'inp':prompt,
-                    'hyps':orig_os[1],
-                    'scos':orig_scos[1],
-                    "stats":stats[1],
-                    "ver":"best",
-                    "prefix":j
-                })
-                # save progress every 10 samples
-                if j%30==0:
-                    tmp = pd.DataFrame(allvals)
-                    tmp.to_json("output/exhaustive/ex"+str(i)+".jsonl", orient="records", lines=True)
-
-        tmp = pd.DataFrame(allvals)
-        tmp.to_json("output/bigdset.jsonl", orient="records", lines=True)
+        # only do resample every 3 tokens
+        
+        prompt, orig_os, orig_scos, nav, oav, obests, oavgs, nb, ob, stats = sampfrominp(datadf, tok, mod, stmtok, stmshp, i, 0, inps, [j, -1], rchoose, tsamps, temp)
+        allvals.append({
+            'inp':prompt,
+            'hyps':orig_os[1],
+            'scos':orig_scos[1],
+            "stats":stats[1],
+            "ver":"best",
+            "prefix":j
+        })
+        # save progress every 10 samples
+        if i%20==0:
+            tmp = pd.DataFrame(allvals)
+            tmp.to_json("output/bigdset.jsonl", orient="records", lines=True)
 
         #sampfrominp(datadf, tok, mod, stmtok, stmshp, i, 0, inps, [-1], rchoose, tsamps, temp)
         #tmp = pd.DataFrame(allvals)

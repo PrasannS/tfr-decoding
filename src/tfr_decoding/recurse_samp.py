@@ -102,7 +102,8 @@ def sample(
         elif self.man_pref.shape[0]==1:
             input_ids = self.man_pref.repeat(input_ids.shape[0], 1).to(self.device)
         else:
-            print("prefix unusable, incorrect format")
+            # when it's just 1 maybe there's only 1 dimension?
+            input_ids = self.man_pref.to(self.device)
 
     # keep track of which sequences are already finished
     unfinished_sequences = input_ids.new(input_ids.shape[0]).fill_(1)
@@ -164,26 +165,28 @@ def sample(
         # get entropy
         entropy = probs*torch.log(probs).nan_to_num()
         entropy = -1*torch.sum(entropy, dim=1)
-        mn = torch.mean(probs, dim=1).unsqueeze(dim=1)
+        #mn = torch.mean(probs, dim=1).unsqueeze(dim=1)
         #print(mn.shape)
         #print(probs.shape)
-        diffs = probs - mn
-        var = torch.mean(torch.pow(diffs, 2.0), dim=1)
-        std = torch.pow(var, 0.5).unsqueeze(1)
-        zscores = diffs / std
-        skews = torch.mean(torch.pow(zscores, 3.0), dim=1).unsqueeze(1)
-        kurtoses = torch.mean(torch.pow(zscores, 4.0), dim=1).unsqueeze(1) - 3.0 
-        top1 = torch.max(probs, dim=1)
+        #diffs = probs - mn
+        #var = torch.mean(torch.pow(diffs, 2.0), dim=1)
+        #std = torch.pow(var, 0.5).unsqueeze(1)
+        #zscores = diffs / std
+        #skews = torch.mean(torch.pow(zscores, 3.0), dim=1).unsqueeze(1)
+        #kurtoses = torch.mean(torch.pow(zscores, 4.0), dim=1).unsqueeze(1) - 3.0 
+        #top1 = torch.max(probs, dim=1)
         #print(next_tokens)
-        tokstats['mean'].append(mn)
-        tokstats['stdev'].append(std)
+        #tokstats['mean'].append(mn)
+        #tokstats['stdev'].append(std)
         tokstats['entropy'].append(entropy)
-        tokstats['skewness'].append(skews)
-        tokstats['kurtoses'].append(kurtoses)
-        tokstats['top1s'].append(top1.values)
-        tokstats['selected'].append(list([probs[i][next_tokens[i]] for i in range(len(probs))]))
+        #tokstats['skewness'].append(skews)
+        #tokstats['kurtoses'].append(kurtoses)
+        #tokstats['top1s'].append(top1.values)
+        #tokstats['selected'].append(list([probs[i][next_tokens[i]] for i in range(len(probs))]))
         #print(top1.shape)
         #print(std.shape)
+        if input_ids.shape[1]%20==0:
+            print("-")
 
         # TODO add in skewness, mean, stdev, and return those values
 
@@ -209,6 +212,10 @@ def sample(
                 break
             else:
                 this_peer_finished = True
+
+    # make it all in batch form
+    if input_ids.shape[0]>8:
+        input_ids = input_ids.unsqueeze(0)
 
     if return_dict_in_generate:
         if self.config.is_encoder_decoder:
