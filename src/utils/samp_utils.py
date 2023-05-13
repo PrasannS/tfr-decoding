@@ -7,10 +7,6 @@ import random
 
 # make prompt for eli5
 def construct_prompt(row):
-    otemplate = \
-"""
-The system will write a detailed and long post to respond to the user's question. Explain like the user is five years old. 
-Question: """
     template = \
 """
 Give a lengthy, detailed response. 
@@ -268,7 +264,7 @@ def inpsampall(datadf, tok, mod, stmtok, stmshp, inps, pflen, rchoose, tsamps, n
 def mean(l):
     return sum(l)/len(l)
 
-def dset_randsamp(datadf, tok, mod, stmtok, stmshp, rchoose, tsamps, temp):
+def dset_randsamp(datadf, tok, mod, stmtok, stmshp, rchoose, tsamps, temp, resamp=False):
     allvals = []
     for i in range(len(datadf)):
         # get initial sample to go off of
@@ -281,30 +277,31 @@ def dset_randsamp(datadf, tok, mod, stmtok, stmshp, rchoose, tsamps, temp):
             "ver":"first",
             "pref":0
         })
-        # take a random hyp
-        bscoind = random.randint(0, len(orig_scos[0])-1)
-        # take len of best path in initial sample, we'll resample several times from here
-        bhyplen = len(tok(orig_os[0][bscoind]).input_ids) 
-        j = random.randint(3, bhyplen-1)
-        inps = {
-            'allhyps':[[orig_os[0][bscoind]]*tsamps[0]],
-            'allscos':[orig_scos[0]]
-        }
-        # only do resample every 3 tokens
-        
-        prompt, orig_os, orig_scos, nav, oav, obests, oavgs, nb, ob, stats = sampfrominp(datadf, tok, mod, stmtok, stmshp, i, 0, inps, [j, -1], rchoose, tsamps, temp)
-        allvals.append({
-            'inp':prompt,
-            'hyps':orig_os[1],
-            'scos':orig_scos[1],
-            "stats":stats[1],
-            "ver":"best",
-            "prefix":j
-        })
+        if resamp:
+            # take a random hyp
+            bscoind = random.randint(0, len(orig_scos[0])-1)
+            # take len of best path in initial sample, we'll resample several times from here
+            bhyplen = len(tok(orig_os[0][bscoind]).input_ids) 
+            j = random.randint(3, bhyplen-1)
+            inps = {
+                'allhyps':[[orig_os[0][bscoind]]*tsamps[0]],
+                'allscos':[orig_scos[0]]
+            }
+            # only do resample every 3 tokens
+            
+            prompt, orig_os, orig_scos, nav, oav, obests, oavgs, nb, ob, stats = sampfrominp(datadf, tok, mod, stmtok, stmshp, i, 0, inps, [j, -1], rchoose, tsamps, temp)
+            allvals.append({
+                'inp':prompt,
+                'hyps':orig_os[1],
+                'scos':orig_scos[1],
+                "stats":stats[1],
+                "ver":"best",
+                "prefix":j
+            })
         # save progress every 10 samples
         if i%20==0:
             tmp = pd.DataFrame(allvals)
-            tmp.to_json("output/bigdset.jsonl", orient="records", lines=True)
+            tmp.to_json("output/biggerdset.jsonl", orient="records", lines=True)
 
         #sampfrominp(datadf, tok, mod, stmtok, stmshp, i, 0, inps, [-1], rchoose, tsamps, temp)
         #tmp = pd.DataFrame(allvals)

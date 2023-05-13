@@ -10,4 +10,4 @@ src/
 
 analyze_entropy, directbeam, outspace_explore, prefix_explore: Notebooks for analysis on prefix decoding, which we generate results with
 
-other files: for exploration with respect to SteamSHP setting, as well as for training of SteamSHP prefix models 
+other files: for exploration with respect to SteamSHP setting, as well as for training of SteamSHP prefix models

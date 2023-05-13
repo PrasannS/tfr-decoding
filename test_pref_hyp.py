@@ -7,7 +7,7 @@ from src.tfr_decoding.custom_bs import beam_search
 from src.tfr_decoding.recurse_samp import sample
 from src.utils.samp_utils import inpsampall, dset_randsamp   
 
-device = 'cuda:3' # if you have a GPU
+device = 'cuda:1' # if you have a GPU
 
 
 # get shp model
@@ -34,15 +34,15 @@ model.eval()
 #eli5 = load_dataset("stanfordnlp/shp", data_dir="explainlikeimfive")
 #eliorig = pd.DataFrame(eli5['train'])
 elidf = pd.read_json("elidataset.jsonl", orient="records", lines="true")
-elidf = elidf.drop_duplicates(subset="history").iloc[13000:]
+elidf = elidf.drop_duplicates(subset="history").iloc[16000:]
 
 #inpsall = pd.read_json("baselines1.jsonl", lines=True, orient='records')
 #inpsall = pd.concat([inpsall, pd.read_json("baselines2.jsonl", lines=True, orient='records')])
 
 
-pflen = [.7, -1]
-rchoose = [2, 2]
-tsamps = [4, 4]
+pflen = [.7]
+rchoose = [2]
+tsamps = [3]
 
 #sampfrominp(3, 0, inpsall, pflen, rchoose, tsamps)
 #isall = inpsampall(elidf.iloc[:100], tokenizer, model, steamtok, steamshp, None, pflen, rchoose, tsamps, 0, 0.9)
