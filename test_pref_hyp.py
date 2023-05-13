@@ -33,7 +33,7 @@ model.eval()
 #elidf = pd.DataFrame({'history':questions})        
 #eli5 = load_dataset("stanfordnlp/shp", data_dir="explainlikeimfive")
 #eliorig = pd.DataFrame(eli5['train'])
-elidf = pd.read_json("elidataset.jsonl", orient="records", lines="true")
+elidf = pd.read_json("output/elidataset.jsonl", orient="records", lines="true")
 elidf = elidf.drop_duplicates(subset="history").iloc[16000:]
 
 #inpsall = pd.read_json("baselines1.jsonl", lines=True, orient='records')
