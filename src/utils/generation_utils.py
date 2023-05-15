@@ -6,7 +6,7 @@ from src.tfr_decoding.custom_bs import beam_search
 from src.models.models import load_from_checkpoint as lfc
 import time
 
-def load_model(setting, tfrdecode=True, device="cuda:1", train=False):
+def load_model(setting, tfrdecode=True, device="cuda:0", train=False):
     if setting == "noun":
         logging.info('Loading xsum model')
         # load up model

@@ -9,7 +9,7 @@ from comet import download_model, load_from_checkpoint
 import nltk
 
 csv.field_size_limit(sys.maxsize)
-device = "cuda:1"
+device = "cuda:0"
 
 # TODO put elsewhere - make batched version of get_hyp_sco (TODO also do dataloader setup or smth)
 def causalmask (a, dev):
@@ -25,7 +25,7 @@ def batch_hyp_sco(srcs, hyps, args):
     dev = args['device']
     model = args['model']
     
-    out_toks = tok(hyps, return_tensors='pt', padding=True, truncation=True).to(args['device'])
+    out_toks = tok(hyps, return_tensors='pt', padding=True, truncation=True).to(device)
     out_tokens = out_toks.input_ids
     hypmask = causalmask(out_toks.attention_mask, dev)
     
@@ -99,7 +99,7 @@ def get_mbart_nllsco(inpu, outpu, inptok, labtok, mod, dev):
     return losses
 
 def rescore_cands(dset, hyplist, srclist):
-    device = "cuda:1" if torch.cuda.is_available() else "cpu"
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
     if "de" in dset:
         mname = "facebook/mbart-large-50-one-to-many-mmt"
         src_l = "en_XX"
@@ -230,7 +230,7 @@ def get_posunique(sentence, noun):
 
 # sco is the score funct, dset is either model name or 
 # is the language (can be style as well in certain cases)
-def get_scores_auto(hyps, srcs, refs, sco="cqe", dset = "", device="cuda:1"):
+def get_scores_auto(hyps, srcs, refs, sco="cqe", dset = "", device="cuda:0"):
     totaltime = -1
     # comet qe
     if sco=='cqe':

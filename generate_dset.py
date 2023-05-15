@@ -33,7 +33,7 @@ def test_config(mod, tok, data, config):
 if __name__=="__main__":
     setting = "table2text"
     # get generation model with monkey patching based on setting
-    mod, tok, dset, dec_pref = load_model(setting, True, "cuda:1", True)
+    mod, tok, dset, dec_pref = load_model(setting, True, "cuda:0", True)
     dset = list(dset)
 
     save_interv = 2000
@@ -42,7 +42,7 @@ if __name__=="__main__":
     for s in range(saves):
         allcands = test_config(mod, tok, dset[save_interv*s:(s+1)*save_interv], {
                 "max_len":90,
-                "device":'cuda:1',
+                "device":'cuda:0',
                 "beam_size":50,
                 "dec_prefix":dec_pref,
                 "tfr_interv":1000,

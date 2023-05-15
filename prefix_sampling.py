@@ -148,7 +148,7 @@ def test_finesample(inplist, pfsampler, max_resamps, rec_n = 3, check_n = 3, con
 
 if __name__=="__main__":
     # first load relevant models
-    device = 'cuda:1' # if you have a GPU
+    device = 'cuda:0' # if you have a GPU
 
 
     # get generation model
