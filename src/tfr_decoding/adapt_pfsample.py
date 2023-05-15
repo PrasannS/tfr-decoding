@@ -6,6 +6,7 @@ import warnings
 import torch
 import torch.distributed as dist
 from torch import nn
+import numpy as np
 import random
 
 from transformers.generation.logits_process import (
@@ -39,8 +40,34 @@ def rec_dist(rec, curind):
     if prop==1:
         return 0
     return 1-prop/(30/min(curind, 30))
-        
 
+def earlymax(lis):
+    mind = 0
+    mval = -10000
+    for i in range(len(lis)):
+        if lis[i] > mval:
+            mind = i
+            mval = lis[i]
+    return mind
+
+def mass_sco(record, decay):
+    lscos = []
+    for i in range(len(record)):
+        csco = 0
+        # to start, only look at values from left (including self)
+        for j in range(i+1):
+            # subtract if bad
+            if record[j]==0:
+                # larger penalty the closer we get to index in question
+                csco = csco-pow(decay, i-j)
+            else:
+                # bigger reward if we're closer to given index
+                csco = csco+pow(decay, i-j)
+        lscos.append(csco)
+    # TODO for debugging
+    print(lscos)
+    return earlymax(lscos)
+                
 # monkeypatched hyper-params: rec_n, check_n, cont_len
 def sample(
     self,
@@ -104,20 +131,16 @@ def sample(
         encoder_hidden_states = (
             model_kwargs["encoder_outputs"].get("hidden_states") if output_hidden_states else None
         )
-    # record prefix metric prediction every recn toks
-    if hasattr(self, "check_n"):
-        print("has check_n")
-        rec_n = self.rec_n # record every this many tokens
-        check_n = self.check_n # check every this many tokens
-        cont_len = self.cont_len # max context length for checks 
-    else:
-        print("no check n")
-        # never resample
-        check_n = 1000
+    rec_n = self.rec_n # record every this many tokens
     if hasattr(self, "source_str"):
         source_str = self.source_str
     # record of how good things are so far
     record = []
+    # at end of decoding, choose best prefix to resample from. After external check, we can just recall as adaptive baseline code as necessary
+    if hasattr(self, "over_inpids"):
+        if self.over_inpids is not None:
+            input_ids = self.over_inpids
+            record = self.oldrecord
     # TODO setup later
     stdrecord = []
     unused_toks = 0
@@ -131,6 +154,7 @@ def sample(
     lastoutputs = None
     # auto-regressive generation
     while True:
+        self.decoded_toks = self.decoded_toks + 1
         if synced_gpus:
             # Under synced_gpus the `forward` call must continue until all gpus complete their sequence.
             # The following logic allows an early break if all peers finished generating their sequence
@@ -198,39 +222,17 @@ def sample(
 
         # update generated ids, model inputs, and length for next step
         input_ids = torch.cat([input_ids, next_tokens[:, None]], dim=-1)
-        budget = rec_n*self.max_resamps*check_n
+        
         
         # we need to do prefix sampling check
-        if input_ids.shape[1]%rec_n==0 and budget>unused_toks+input_ids.shape[1]:
+        if input_ids.shape[1]%rec_n==0:
             hyp_str = self.tok.decode(input_ids[0], skip_special_tokens=True)
             goodlogits = self.qualitypref.predsingle(source_str, hyp_str)
             pred = torch.argmax(goodlogits, dim=-1)
             conf = torch.max(goodlogits, dim=-1).values # TODO getting logits might be a bit weird
             record.append(pred)
-            # we hit a check interval
-            if len(record)%check_n==0 and resinds.count(input_ids.shape[1])<2:
-                left = max(0, len(record)-cont_len)
-                cont = record[left:] # get up to last cont_len contexts
-                checkpoint = get_checkpoint(record, rec_n, checkpoint) # get last 1, or start from beginning
-                # probability of resampling defined by numbers of 0s, 1s in check interval
-                resamp_prob = rec_dist(cont, input_ids.shape[1])
-                print("___")
-                print(unused_toks+input_ids.shape[1], "/", budget)
-                print(hyp_str)
-                print(record, ", ", resamp_prob)
-                print(input_ids.shape[1])
-                # only resample at point up to 3 times
-                if random.random()<resamp_prob:
-                    resinds.append(input_ids.shape[1])
-                    # for evaluation, track how many tokens we never use
-                    unused_toks = unused_toks + (input_ids.shape[1]-checkpoint)
-                    # cut off most recent decoding
-                    input_ids = input_ids[:, :checkpoint]
-                    # not sure what this is for, but to keep code equivalent, store this and pass back in
-                    outputs = lastoutputs
-                    record = record[:int(checkpoint/3)]
-                    
-                
+        if input_ids.shape[1]%15==0:
+            print("-")
                 
         model_kwargs = self._update_model_kwargs_for_generation(
             outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
@@ -246,9 +248,23 @@ def sample(
                 break
             else:
                 this_peer_finished = True
-
-    self.decoded_toks = input_ids.shape[1]+unused_toks
-    # make it all in batch form
+    
+    DECAY = self.decay
+    print(record)
+    # otherwise go by weighted function
+    checkpt = mass_sco(record, DECAY)
+    # if mostly 1s at the end, try again from the middle
+    if checkpt == len(record)-1:
+        checkpt = int(len(record)/2)
+    if checkpt==0 and record[0]==0:
+        self.over_inpids = None # if a bunch of 0s at the beginning, just resample whole thing
+    else:
+        # prepare for next round of decoding
+        self.over_inpids = input_ids[:, :checkpt*rec_n]
+        # use record from previous decoding
+        self.oldrecord = record[:checkpt+1]
+    
+    # make it all in batch form, TODO so far batching not supported
     if input_ids.shape[0]>8:
         input_ids = input_ids.unsqueeze(0)
 

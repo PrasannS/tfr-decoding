@@ -3,8 +3,9 @@ import torch
 from datasets import load_dataset
 import pandas as pd
 import numpy as np
-#from src.tfr_decoding.prefix_sample import sample # new sampling method
-from src.tfr_decoding.finepref_sample import sample
+from src.tfr_decoding.prefix_sample import sample as naivesample# new sampling method
+from src.tfr_decoding.finepref_sample import sample as fpsample
+from src.tfr_decoding.adapt_pfsample import sample as apsample
 from src.utils.samp_utils import inpsampall, dset_randsamp   
 from src.tfr_decoding.shp_modeling import T5BinaryClassifier
 
@@ -66,24 +67,35 @@ class PrefixSampler():
     
     # adaptive sampling, but this time we re-sample from promising prefixes with each new round instead of 
     # random new stuff
-    def adapt_pfsample(self, source, thresh, rounds):
+    def adapt_pfsample(self, source, thresh, rounds, decay=0.9, rec_n=3):
         scores = []
         allouts = []
+        self.mod.sample = apsample.__get__(self.mod)
+        self.mod.over_inpids=None
+        self.mod.decoded_toks = 0
+        self.mod.decay = decay
+        self.mod.rec_n = rec_n
+        self.mod.source_str = source
         for i in range(rounds):
+            # generate, get score, decoding algorithm automatically handles new 
+            # resample point 
             _, outs, _ = self.gen_row(source)
             score = self.get_reward_single({'context':source, 'hyp':outs[0]})
+            print(score, " ", outs[0])
             scores.append(float(score))
             allouts.append(outs[0])
-            tot_toks = sum([len(self.mod.tok(o).input_ids) for o in allouts])
+            tot_toks = self.mod.decoded_toks
             # we don't need to sample anymore
             if score>thresh:
+                self.mod.decoded_toks = 0
                 return scores, allouts, tot_toks
         
-        
+        self.mod.decoded_toks = 0
         return scores, allouts, tot_toks
     
     # do prefix sampling following algorithm defined from before
     def do_prefix_sample(self, source, max_resamps=6, checks=[15]):
+        self.mod.sample = naivesample.__get__(self.mod)
         self.mod.source_str = source
         # once we hit max_resamps, then just decode to end with what we have (TODO might need a better baseline?)
         self.mod.max_resamps = max_resamps
@@ -96,6 +108,8 @@ class PrefixSampler():
         return outs[0], float(score), dectoks
     
     def do_fine_sample(self, source, max_resamps, rec_n = 3, check_n = 3, cont_len = 5):
+
+        self.mod.sample = fpsample.__get__(self.mod)
         self.mod.source_str = source
         # once we hit max_resamps, then just decode to end with what we have (TODO might need a better baseline?)
         self.mod.max_resamps = max_resamps
@@ -117,6 +131,19 @@ def test_baseline(inplist, pfsampler, thresh, rounds):
     allouts = []
     for inp in inplist:
         scos, outs, tot_toks = pfsampler.adaptive_baseline(inp, thresh, rounds)
+        best_ind = int(np.argmax(scos))
+        ascos.append(scos[best_ind])
+        allouts.append(outs[best_ind])
+        abudgets.append(tot_toks)
+    return pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
+
+def test_apsample(inplist, pfsampler, thresh, rounds, decay, rec_n):
+    ascos = []
+    abudgets = []
+    allouts = []
+    for inp in inplist:
+        # ideally should function as lower budget version of adaptive sample
+        scos, outs, tot_toks = pfsampler.adapt_pfsample(inp, thresh, rounds, decay, rec_n)
         best_ind = int(np.argmax(scos))
         ascos.append(scos[best_ind])
         allouts.append(outs[best_ind])
@@ -155,7 +182,7 @@ if __name__=="__main__":
     tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-xxl")
     qpref = T5BinaryClassifier.load_from_checkpoint("./lightning_logs/version_4/checkpoints/epoch=2-step=11896.ckpt")
     model = T5ForConditionalGeneration.from_pretrained("google/flan-t5-xxl", device_map="auto")#.to(device)
-    model.sample = sample.__get__(model)
+    
     model.tokenizer = tokenizer
     model.tok = tokenizer
     pfname = 'stanfordnlp/SteamSHP-flan-t5-large'
