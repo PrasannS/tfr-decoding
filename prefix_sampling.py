@@ -107,6 +107,23 @@ class PrefixSampler():
         self.mod.decoded_toks = 0
         return outs[0], float(score), dectoks
     
+    # do prefix sampling following algorithm defined from before
+    def do_enhanced_sample(self, source, max_resamps=6, checks=[15], rec_n=3, cont_checks=3):
+        self.mod.sample = naivesample.__get__(self.mod)
+        self.mod.source_str = source
+        # once we hit max_resamps, then just decode to end with what we have (TODO might need a better baseline?)
+        self.mod.max_resamps = max_resamps
+        # checkpoint # of tokens 
+        self.mod.checklist = checks
+        # how frequently to get checkpoints
+        self.mod.rec_n = 3
+        self.mod.cont_checks = 3
+        _, outs, _ = self.gen_row(source)
+        score = self.get_reward_single({'context':source, 'hyp':outs[0]})
+        dectoks = self.mod.decoded_toks
+        self.mod.decoded_toks = 0
+        return outs[0], float(score), dectoks
+    
     def do_fine_sample(self, source, max_resamps, rec_n = 3, check_n = 3, cont_len = 5):
 
         self.mod.sample = fpsample.__get__(self.mod)
@@ -156,6 +173,17 @@ def test_pfsample(inplist, pfsampler, max_resamps, checks):
     allouts = []
     for inp in inplist:
         out, score, dectoks = pfsampler.do_prefix_sample(inp, max_resamps, checks)
+        ascos.append(score)
+        allouts.append(out)
+        abudgets.append(dectoks)
+    return pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
+
+def test_enhancedsample(inplist, pfsampler, max_resamps, checks, rec_n, cont_checks):
+    ascos = []
+    abudgets = []
+    allouts = []
+    for inp in inplist:
+        out, score, dectoks = pfsampler.do_prefix_sample(inp, max_resamps, checks, rec_n, cont_checks)
         ascos.append(score)
         allouts.append(out)
         abudgets.append(dectoks)

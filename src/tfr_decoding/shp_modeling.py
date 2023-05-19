@@ -40,7 +40,7 @@ class CustomDataset(Dataset):
         }
 
 class T5BinaryClassifier(pl.LightningModule):
-    def __init__(self, model_name='stanfordnlp/SteamSHP-flan-t5-large', learning_rate=3e-5, max_len=512):
+    def __init__(self, model_name='stanfordnlp/SteamSHP-flan-t5-large', learning_rate=3e-5, max_len=512, contmod=True):
         super().__init__()
 
         self.model = T5ForConditionalGeneration.from_pretrained(model_name)
@@ -50,6 +50,8 @@ class T5BinaryClassifier(pl.LightningModule):
         self.max_len = max_len
         self.predictions = []
         self.labels = []
+        if contmod:
+            self.linear = torch.nn.Linear(self.model.config.d_model, 256)
 
     def forward(self, input_ids, attention_mask, labels=None):
         if len(input_ids.shape)==1:
@@ -87,14 +89,16 @@ class T5BinaryClassifier(pl.LightningModule):
         return {'preds': preds, 'labels': labels}
     
     # make single prediction given inputs
-    def predsingle(self, inp, hyp):
+    def predsingle(self, inp, hyp, logits=False):
         inp = self.getinp(inp, hyp)
         input_ids = inp['input_ids']
         attention_mask = inp['attention_mask']
         if len(input_ids.shape)==1:
             input_ids = input_ids.unsqueeze(0)
             attention_mask = attention_mask.unsqueeze(0)
-        return self.model.generate(input_ids, attention_mask=attention_mask, max_new_tokens=2)
+        
+        
+        return self.model.generate(input_ids, attention_mask=attention_mask, max_new_tokens=2, return_dict_in_generate=logits,output_scores=logits)
     
     # make input for prediction
     def getinp(self, inp, hyp):
@@ -112,8 +116,8 @@ class T5BinaryClassifier(pl.LightningModule):
         attention_mask = inputs['attention_mask'][0]
 
         return {
-            'input_ids': input_ids,
-            'attention_mask': attention_mask,
+            'input_ids': input_ids.to(self.device),
+            'attention_mask': attention_mask.to(self.device),
         }
 
     def configure_optimizers(self):
