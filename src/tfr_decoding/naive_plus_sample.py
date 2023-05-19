@@ -25,7 +25,8 @@ logger = logging.get_logger(__name__)
 
 CTHRESH = 0.2
 
-
+# HPARAMS
+# rec_n, cont_checks, source_str, checklist, 
 def sample(
     self,
     input_ids: torch.LongTensor,
@@ -188,7 +189,7 @@ def sample(
         # update generated ids, model inputs, and length for next step
         input_ids = torch.cat([input_ids, next_tokens[:, None]], dim=-1)
         
-        if input_ids.shape[1]%rec_n==0 and resamps<self.max_resamps: # TODO add something to reduce calls to save compute
+        if input_ids.shape[1]%rec_n==0 and resamps<self.max_resamps and cind<(len(CHECKS)-1): # TODO add something to reduce calls to save compute
             hyp_str = self.tok.decode(input_ids[0], skip_special_tokens=True)
             pref_out = self.qualitypref.predsingle(source_str, hyp_str, True)
             transition_scores = self.qualitypref.model.compute_transition_scores(

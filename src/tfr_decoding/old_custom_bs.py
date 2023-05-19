@@ -33,11 +33,13 @@ from transformers.generation.stopping_criteria import (
     validate_stopping_criteria,
 )
 
+
 from transformers.generation.utils import BeamSearchOutput, BeamSearchDecoderOnlyOutput, BeamSearchEncoderDecoderOutput
 
 from transformers.utils import logging
 
 logger = logging.get_logger(__name__)
+
 
 def beam_search(
         self,
