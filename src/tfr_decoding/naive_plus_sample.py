@@ -6,7 +6,7 @@ import warnings
 import torch
 import torch.distributed as dist
 from torch import nn
-import random
+import numpy as np
 
 from transformers.generation.logits_process import (
     LogitsProcessorList,
@@ -23,25 +23,9 @@ from transformers.generation.utils import SampleOutput, SampleDecoderOnlyOutput,
 
 logger = logging.get_logger(__name__)
 
-def get_checkpoint(rec, rec_int, prevcheck):
-    retind = -1
-    for i in range(len(rec)): # take last value where prediction isn't 0
-        if rec[i]>0.5:
-            retind = i
-    if retind==-1:
-        return prevcheck
-    else:
-        return (retind+1)*rec_int
-    
-def rec_dist(rec, curind):
-    # resample based on how many ones there are
-    prop = (sum(rec)/len(rec))
-    if prop==1:
-        return 0
-    return 1-prop/(30/min(curind, 30))
-        
+CTHRESH = 0.2
 
-# monkeypatched hyper-params: rec_n, check_n, cont_len
+
 def sample(
     self,
     input_ids: torch.LongTensor,
@@ -59,7 +43,7 @@ def sample(
     **model_kwargs,
 ) -> Union[SampleOutput, torch.LongTensor]:
     
-    print("monkeysamp")
+    print("start decoding")
 
     # init values
     logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
@@ -104,25 +88,30 @@ def sample(
         encoder_hidden_states = (
             model_kwargs["encoder_outputs"].get("hidden_states") if output_hidden_states else None
         )
-    # record prefix metric prediction every recn toks
-    if hasattr(self, "check_n"):
-        print("has check_n")
-        rec_n = self.rec_n # record every this many tokens
-        check_n = self.check_n # check every this many tokens
-        cont_len = self.cont_len # max context length for checks 
+    
+    # list of points (# of decoded tokens) where we need to do a check / potentially backtrack
+    if hasattr(self, "checklist"):
+        CHECKS = [1]+self.checklist+[10000]
+        rec_n = self.rec_n
     else:
-        print("no check n")
         # never resample
-        check_n = 1000
+        CHECKS = [1, 10000]
+        rec_n = 3
     if hasattr(self, "source_str"):
         source_str = self.source_str
+        
+    # use last 3 checks to see if resampling is necessary [TODO may need smth fine-grained]
+    if hasattr(self, "cont_checks"):
+        cont_checks = self.cont_checks
+    else:
+        cont_checks = 3
+    cind = 1
     # record of how good things are so far
-    record = []
+    goodrecord = []
     # TODO setup later
     stdrecord = []
+    resamps = 0
     unused_toks = 0
-    checkpoint = 1
-    resinds = []
 
     # keep track of which sequences are already finished
     unfinished_sequences = input_ids.new(input_ids.shape[0]).fill_(1)
@@ -152,7 +141,7 @@ def sample(
             output_hidden_states=output_hidden_states,
         )
         
-        if lastoutputs is None: # not sure if this saves anything
+        if lastoutputs is None and hasattr(self, "checklist"): # not sure if this saves anything
             lastoutputs = outputs
 
         if synced_gpus and this_peer_finished:
@@ -198,39 +187,37 @@ def sample(
 
         # update generated ids, model inputs, and length for next step
         input_ids = torch.cat([input_ids, next_tokens[:, None]], dim=-1)
-        budget = rec_n*self.max_resamps*check_n
+        
+        if input_ids.shape[1]%rec_n==0 and resamps<self.max_resamps: # TODO add something to reduce calls to save compute
+            hyp_str = self.tok.decode(input_ids[0], skip_special_tokens=True)
+            pref_out = self.qualitypref.predsingle(source_str, hyp_str, True)
+            transition_scores = self.qualitypref.model.compute_transition_scores(
+                pref_out.sequences, pref_out.scores, normalize_logits=True
+            )
+            pred = float(np.argmax(pref_out.scores[-1].cpu()))
+            # probability (non-adjusted)
+            prob = float(np.exp(transition_scores[0][-1].cpu()))
+            # adjust probability, keep track
+            if pred==0:
+                prob = 1-prob
+            goodrecord.append(prob) 
         
         # we need to do prefix sampling check
-        if input_ids.shape[1]%rec_n==0 and budget>unused_toks+input_ids.shape[1]:
-            hyp_str = self.tok.decode(input_ids[0], skip_special_tokens=True)
-            goodlogits = self.qualitypref.predsingle(source_str, hyp_str)
-            pred = torch.argmax(goodlogits, dim=-1)
-            conf = torch.max(goodlogits, dim=-1).values # TODO getting logits might be a bit weird
-            record.append(pred)
-            # we hit a check interval
-            if len(record)%check_n==0 and resinds.count(input_ids.shape[1])<2:
-                left = max(0, len(record)-cont_len)
-                cont = record[left:] # get up to last cont_len contexts
-                checkpoint = get_checkpoint(record, rec_n, checkpoint) # get last 1, or start from beginning
-                # probability of resampling defined by numbers of 0s, 1s in check interval
-                resamp_prob = rec_dist(cont, input_ids.shape[1])
-                print("___")
-                print(unused_toks+input_ids.shape[1], "/", budget)
-                print(hyp_str)
-                print(record, ", ", resamp_prob)
-                print(input_ids.shape[1])
-                # only resample at point up to 3 times
-                if 0.5<resamp_prob:
-                    resinds.append(input_ids.shape[1])
-                    # for evaluation, track how many tokens we never use
-                    unused_toks = unused_toks + (input_ids.shape[1]-checkpoint)
-                    # cut off most recent decoding
-                    input_ids = input_ids[:, :checkpoint]
-                    # not sure what this is for, but to keep code equivalent, store this and pass back in
-                    outputs = lastoutputs
-                    record = record[:int(checkpoint/3)]
-                    
-                
+        if input_ids.shape[1]%CHECKS[cind]==0:
+            
+            # we're good to keep sampling
+            if max(goodrecord[-1*cont_checks:])>CTHRESH or resamps>=self.max_resamps: # TODO set this in call as well
+                cind = cind+1
+                lastoutputs = outputs
+            # not good, resample from most recent decent point
+            else:
+                # cut off most recent decoding
+                input_ids = input_ids[:, :CHECKS[cind-1]]
+                # not sure what this is for, but to keep code equivalent, store this and pass back in
+                outputs = lastoutputs
+                resamps = resamps+1
+                # for evaluation, track how many tokens we never use
+                unused_toks = unused_toks + (CHECKS[cind]-CHECKS[cind-1])
                 
         model_kwargs = self._update_model_kwargs_for_generation(
             outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder

@@ -124,53 +124,90 @@ class PrefixSampler():
         self.mod.decoded_toks = 0
         return outs[0], float(score), dectoks
     
-    
-def test_baseline(inplist, pfsampler, thresh, rounds):
+SAVEINT = 50
+def test_baseline(inplist, pfsampler, thresh, rounds, fname):
     ascos = []
     abudgets = []
     allouts = []
     for inp in inplist:
-        scos, outs, tot_toks = pfsampler.adaptive_baseline(inp, thresh, rounds)
-        best_ind = int(np.argmax(scos))
-        ascos.append(scos[best_ind])
-        allouts.append(outs[best_ind])
-        abudgets.append(tot_toks)
+        try:
+            scos, outs, tot_toks = pfsampler.adaptive_baseline(inp, thresh, rounds)
+            best_ind = int(np.argmax(scos))
+            ascos.append(scos[best_ind])
+            allouts.append(outs[best_ind])
+            abudgets.append(tot_toks)
+            
+            if ((len(abudgets)+1)%SAVEINT)==0:
+                tmp = pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
+                tmp.to_json(fname, orient="records", lines=True)
+        except:
+            print("strange issue")
+            ascos.append(0)
+            allouts.append("")
+            abudgets.append(-1)
+        print(len(ascos))
+            
     return pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
 
-def test_apsample(inplist, pfsampler, thresh, rounds, decay, rec_n):
+def test_apsample(inplist, pfsampler, thresh, rounds, decay, rec_n, fname):
     ascos = []
     abudgets = []
     allouts = []
     for inp in inplist:
-        # ideally should function as lower budget version of adaptive sample
-        scos, outs, tot_toks = pfsampler.adapt_pfsample(inp, thresh, rounds, decay, rec_n)
-        best_ind = int(np.argmax(scos))
-        ascos.append(scos[best_ind])
-        allouts.append(outs[best_ind])
-        abudgets.append(tot_toks)
+        try:
+            # ideally should function as lower budget version of adaptive sample
+            scos, outs, tot_toks = pfsampler.adapt_pfsample(inp, thresh, rounds, decay, rec_n)
+            best_ind = int(np.argmax(scos))
+            ascos.append(scos[best_ind])
+            allouts.append(outs[best_ind])
+            abudgets.append(tot_toks)
+            
+            if ((len(abudgets)+1)%SAVEINT)==0:
+                tmp = pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
+                tmp.to_json(fname, orient="records", lines=True)
+        except:
+            ascos.append(0)
+            allouts.append("")
+            abudgets.append(-1)
     return pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
 
-def test_pfsample(inplist, pfsampler, max_resamps, checks):
+def test_pfsample(inplist, pfsampler, max_resamps, checks, fname):
     ascos = []
     abudgets = []
     allouts = []
     for inp in inplist:
-        out, score, dectoks = pfsampler.do_prefix_sample(inp, max_resamps, checks)
-        ascos.append(score)
-        allouts.append(out)
-        abudgets.append(dectoks)
+        try:
+            out, score, dectoks = pfsampler.do_prefix_sample(inp, max_resamps, checks)
+            ascos.append(score)
+            allouts.append(out)
+            abudgets.append(dectoks)
+            if ((len(abudgets)+1)%SAVEINT)==0:
+                tmp = pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
+                tmp.to_json(fname, orient="records", lines=True)
+        except:
+            ascos.append(0)
+            allouts.append("")
+            abudgets.append(-1)
     return pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
 
-def test_finesample(inplist, pfsampler, max_resamps, rec_n = 3, check_n = 3, cont_len = 5):
+def test_finesample(inplist, pfsampler, max_resamps, rec_n, check_n, cont_len, fname):
     ascos = []
     abudgets = []
     allouts = []
     for inp in inplist:
-        out, score, dectoks = pfsampler.do_fine_sample(inp, max_resamps, rec_n, check_n, cont_len)
-        ascos.append(score)
-        allouts.append(out)
-        abudgets.append(dectoks)
-        print(score)
+        try:
+            out, score, dectoks = pfsampler.do_fine_sample(inp, max_resamps, rec_n, check_n, cont_len)
+            ascos.append(score)
+            allouts.append(out)
+            abudgets.append(dectoks)
+            print(score)
+            if ((len(abudgets)+1)%SAVEINT)==0:
+                tmp = pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
+                tmp.to_json(fname, orient="records", lines=True)
+        except:
+            ascos.append(0)
+            allouts.append("")
+            abudgets.append(-1)
     return pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
 
 if __name__=="__main__":
