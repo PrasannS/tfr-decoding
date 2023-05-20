@@ -14,7 +14,8 @@ elidf = pd.read_json("output/elidataset.jsonl", orient="records", lines="true")
 # 25000 for P2
 # 31500 for P3
 # 50000 for P4
-elidf = elidf.drop_duplicates(subset="history").iloc[50000:]
+# 65000 for P5
+elidf = elidf.drop_duplicates(subset="history").iloc[65000:]
 
 
 # get shp model
@@ -54,8 +55,8 @@ tsamps = [3]
 #sampfrominp(3, 0, inpsall, pflen, rchoose, tsamps)
 #isall = inpsampall(elidf.iloc[:100], tokenizer, model, steamtok, steamshp, None, pflen, rchoose, tsamps, 0, 0.9)
 #isall = inpsampall(elidf.iloc[:100], tokenizer, model, steamtok, steamshp, None, [.3, -1], rchoose, tsamps, 0, 0.9)
-
-exsamp = dset_randsamp(elidf, tokenizer, model, steamtok, steamshp, rchoose, tsamps, 0.9)
+with torch.no_grad():
+    exsamp = dset_randsamp(elidf, tokenizer, model, steamtok, steamshp, rchoose, tsamps, 0.9)
 #isall = inpsampall(inpsall.iloc[:50], pflen, rchoose, tsamps, 1, .9)
 #isall = inpsampall(inpsall.iloc[:50], pflen, rchoose, tsamps, 2, .9)
 #isall = inpsampall(inpsall.iloc[:50], pflen, rchoose, tsamps, 3, .9)

@@ -23,7 +23,7 @@ from transformers.generation.utils import SampleOutput, SampleDecoderOnlyOutput,
 
 logger = logging.get_logger(__name__)
 
-CTHRESH = 0.2
+CTHRESH = 0.75
 
 # HPARAMS
 # rec_n, cont_checks, source_str, checklist, 
@@ -98,6 +98,10 @@ def sample(
         # never resample
         CHECKS = [1, 10000]
         rec_n = 3
+    outrecs = [None for i in range(len(CHECKS))] # save output state of each checkpoint
+    resamp_rec = [0 for i in range(len(CHECKS))]
+    max_recs = [-1 for i in range(len(CHECKS))] # keep track of max resampling point
+    max_inpids = [None for i in range(len(CHECKS))] # input ids corresponding to best scores for given check
     if hasattr(self, "source_str"):
         source_str = self.source_str
         
@@ -109,16 +113,15 @@ def sample(
     cind = 1
     # record of how good things are so far
     goodrecord = []
-    # TODO setup later
-    stdrecord = []
+    
     resamps = 0
-    unused_toks = 0
 
     # keep track of which sequences are already finished
     unfinished_sequences = input_ids.new(input_ids.shape[0]).fill_(1)
 
     this_peer_finished = False  # used by synced_gpus only
-    lastoutputs = None
+    
+    self.decoded_toks = 0
     # auto-regressive generation
     while True:
         if synced_gpus:
@@ -131,6 +134,7 @@ def sample(
             if this_peer_finished_flag.item() == 0.0:
                 break
 
+        self.decoded_toks = self.decoded_toks+1
         # prepare model inputs
         model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
 
@@ -142,8 +146,8 @@ def sample(
             output_hidden_states=output_hidden_states,
         )
         
-        if lastoutputs is None and hasattr(self, "checklist"): # not sure if this saves anything
-            lastoutputs = outputs
+        if outrecs[cind-1] is None and hasattr(self, "checklist"): # not sure if this saves anything
+            outrecs[cind-1] = outputs
 
         if synced_gpus and this_peer_finished:
             continue  # don't waste resources running the code we don't need
@@ -191,6 +195,7 @@ def sample(
         
         if input_ids.shape[1]%rec_n==0 and resamps<self.max_resamps and cind<(len(CHECKS)-1): # TODO add something to reduce calls to save compute
             hyp_str = self.tok.decode(input_ids[0], skip_special_tokens=True)
+            print(hyp_str)
             pref_out = self.qualitypref.predsingle(source_str, hyp_str, True)
             transition_scores = self.qualitypref.model.compute_transition_scores(
                 pref_out.sequences, pref_out.scores, normalize_logits=True
@@ -201,24 +206,43 @@ def sample(
             # adjust probability, keep track
             if pred==0:
                 prob = 1-prob
-            goodrecord.append(prob) 
+            goodrecord.append(prob)
+        
+        max_indiv_resamps = 12 # how much can we be stuck at single point
         
         # we need to do prefix sampling check
         if input_ids.shape[1]%CHECKS[cind]==0:
-            
+            maxprob = max(goodrecord[-1*cont_checks:])
+            if maxprob>max_recs[cind]:
+                max_recs[cind] = maxprob
+                max_inpids[cind] = input_ids
+                # TODO this might be buggy
+                outrecs[cind] = outputs
+                
+            print("max prob is ", max(goodrecord[-1*cont_checks:]))
             # we're good to keep sampling
-            if max(goodrecord[-1*cont_checks:])>CTHRESH or resamps>=self.max_resamps: # TODO set this in call as well
+            if maxprob>CTHRESH or resamps>=self.max_resamps: # TODO set this in call as well
                 cind = cind+1
-                lastoutputs = outputs
-            # not good, resample from most recent decent point
             else:
-                # cut off most recent decoding
-                input_ids = input_ids[:, :CHECKS[cind-1]]
-                # not sure what this is for, but to keep code equivalent, store this and pass back in
-                outputs = lastoutputs
-                resamps = resamps+1
-                # for evaluation, track how many tokens we never use
-                unused_toks = unused_toks + (CHECKS[cind]-CHECKS[cind-1])
+                # we've been stuck at this checkpoint too much
+                if resamp_rec[cind-1]==max_indiv_resamps:
+                    # move on with best so far
+                    outputs = outrecs[cind]
+                    input_ids = max_inpids[cind]
+                    cind = cind+1
+                    # TODO technically goodrecord can be wrong (might matter?)
+                # resample from last checkpoint
+                else:
+                    print("resamp to ", CHECKS[cind-1])
+                    # cut off most recent decoding
+                    input_ids = input_ids[:, :CHECKS[cind-1]]
+                    # not sure what this is for, but to keep code equivalent, store this and pass back in
+                    outputs = outrecs[cind-1]
+                    resamps = resamps+1
+                    resamp_rec[cind-1] = resamp_rec[cind-1]+1
+                
+                    # reset record
+                    goodrecord = goodrecord[:-1*cont_checks]
                 
         model_kwargs = self._update_model_kwargs_for_generation(
             outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
@@ -235,7 +259,6 @@ def sample(
             else:
                 this_peer_finished = True
 
-    self.decoded_toks = input_ids.shape[1]+unused_toks
     # make it all in batch form
     if input_ids.shape[0]>8:
         input_ids = input_ids.unsqueeze(0)
