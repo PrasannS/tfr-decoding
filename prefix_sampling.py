@@ -6,7 +6,7 @@ import numpy as np
 from src.tfr_decoding.prefix_sample import sample as naivesample# new sampling method
 from src.tfr_decoding.finepref_sample import sample as fpsample
 from src.tfr_decoding.adapt_pfsample import sample as apsample
-from src.tfr_decoding.naive_plus_sample import sample as ensample
+from src.tfr_decoding.naive_plus_sample_old import sample as ensample
 from src.utils.samp_utils import inpsampall, dset_randsamp   
 from src.tfr_decoding.shp_modeling import T5BinaryClassifier
 
