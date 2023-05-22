@@ -6,9 +6,12 @@ import numpy as np
 from src.tfr_decoding.prefix_sample import sample as naivesample# new sampling method
 from src.tfr_decoding.finepref_sample import sample as fpsample
 from src.tfr_decoding.adapt_pfsample import sample as apsample
-from src.tfr_decoding.naive_plus_sample_old import sample as ensample
+from src.tfr_decoding.naive_plus_sample import sample as ensample
 from src.utils.samp_utils import inpsampall, dset_randsamp   
 from src.tfr_decoding.shp_modeling import T5BinaryClassifier
+
+import sys
+sys.setrecursionlimit(1500) # this number can be any limit
 
 
 class PrefixSampler():
@@ -123,7 +126,7 @@ class PrefixSampler():
         score = self.get_reward_single({'context':source, 'hyp':outs[0]})
         dectoks = self.mod.decoded_toks
         self.mod.decoded_toks = 0
-        return outs[0], float(score), dectoks
+        return outs[0], float(score), dectoks, self.mod.allstrs, self.mod.allscos
     
     def do_fine_sample(self, source, max_resamps, rec_n = 3, check_n = 3, cont_len = 5):
 
@@ -212,23 +215,27 @@ def test_enhancedsample(inplist, pfsampler, max_resamps, checks, rec_n, cont_che
     ascos = []
     abudgets = []
     allouts = []
+    a_ascos = []
+    a_astrs = []
     for inp in inplist:
         # try:
-        out, score, dectoks = pfsampler.do_enhanced_sample(inp, max_resamps, checks, rec_n, cont_checks)
+        out, score, dectoks, ast, asc = pfsampler.do_enhanced_sample(inp, max_resamps, checks, rec_n, cont_checks)
+        a_ascos.append(asc)
+        a_astrs.append(ast)
         print(dectoks)
         print(score)
         ascos.append(score)
         allouts.append(out)
         abudgets.append(dectoks)
         if ((len(abudgets)+1)%SAVEINT)==0 and fname is not None:
-            tmp = pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
-            tmp.to_json(fname, orient="records", lines=True)
+            tmp = pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts, "allscos":a_ascos, "allstrs":a_astrs})
+            tmp.to_csv(fname)
         # except:
             
         #     ascos.append(0)
         #     allouts.append("")
         #     abudgets.append(-1)
-    return pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
+    return pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts, "allscos":a_ascos, "allstrs":a_astrs})
 
 def test_finesample(inplist, pfsampler, max_resamps, rec_n = 3, check_n = 3, cont_len = 5, fname=None):
     ascos = []

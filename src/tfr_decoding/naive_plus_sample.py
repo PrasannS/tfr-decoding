@@ -131,6 +131,7 @@ def sample(
 
     fouts = []
     fscores = []
+    fstrs=  []
     # auto-regressive generation
     while True:
         if True: # allow vscode folding on this
@@ -232,20 +233,17 @@ def sample(
             # we're good to keep sampling
             if curprob>CTHRESH:
                 cind = cind+1
+                next_probs, next_inpids = [], []
             else:
                 print(cur_probs)
                 next_probs.append(curprob)
                 next_inpids.append(input_ids)
                 # we've been stuck at this checkpoint too much
                 if len(next_probs)==max_indiv_resamps:
-                    
-                    for i in range(1, len(CHECKS)):
-                        # push stuff back by 2 context check's worth of tokens
-                        CHECKS[i] = CHECKS[i]+2*cont_checks*rec_n
+                    cind = len(CHECKS)-1 # just switch to adaptive with what we have / ordered by prefix sampling
                     # manual starting points
                     cur_probs, cur_inpids = next_probs, next_inpids
                     next_inpids, next_probs = [], []
-                    resamps = resamps - (len(cur_probs)/2) # give back a little budget?
                 
                 input_ids = input_ids[:, :CHECKS[cind-1]]
                 resamps = resamps+1
@@ -266,25 +264,32 @@ def sample(
             # if eos_token was found in one sentence, set sentence to finished
             if eos_token_id is not None:
                 unfinished_sequences = unfinished_sequences.mul((sum(next_tokens != i for i in eos_token_id)).long())
-
+                
             # stop when each sentence is finished, or if we exceed the maximum length
             if unfinished_sequences.max() == 0 or stopping_criteria(input_ids, scores):
                 if not synced_gpus:
                     # treat this as adaptive baseline, TODO multi-gpu code not ready
                     out = self.tokenizer.batch_decode(input_ids)[0]
-                    score = self.get_reward_single({'context':source_str, 'hyp':out})
+                    score = get_reward_single(self, {'context':source_str, 'hyp':out}).cpu()
                     fouts.append(input_ids)
                     fscores.append(score)
+                    fstrs.append(out)
+                    print("adaptive, score ", score, " ", out)
                     # we don't need to sample anymore
                     if score>TTHRESH:
                         break
-                    if len(cur_probs)>0: # instead start from best scoring thing we left off with
+                    if len(fscores)<4 and len(cur_probs)>0: # instead start from best scoring thing we left off with
                         nextind = int(np.argmax(cur_probs))
                         input_ids = cur_inpids.pop(nextind)
                         cur_probs.pop(nextind)
+                        unfinished_sequences = torch.tensor(1).to(self.device)
+                    else:
+                        break
                 else:
                     this_peer_finished = True
     
+    self.allscos = fscores
+    self.allstrs = fstrs
     # we ended up doing semi-adaptive backup, use best option
     if len(fscores)>0:
         input_ids = fouts[int(np.argmax(fscores))]

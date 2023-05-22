@@ -53,13 +53,17 @@ with torch.no_grad():
     #finesample_df.to_json(fname, orient="records", lines=True)
     
     with torch.no_grad():
-        fname = "output/hparam_explore2/enhsamp7_20.jsonl"
+        fname = "output/hparam_explore3/enhsamp7_20.csv"
         finesample_df = test_enhancedsample(inplist, pfsampler, 18, [7, 20], 3, 3, fname)
-        finesample_df.to_json(fname, orient="records", lines=True)
+        finesample_df.to_csv(fname)
         
-        fname = "output/hparam_explore2/enhsamp7_20_30.jsonl"
-        finesample_df = test_enhancedsample(inplist, pfsampler, 18, [7, 20, 30], 3, 3, fname)
-        finesample_df.to_json(fname, orient="records", lines=True)
+        fname = "output/hparam_explore3/enhsamp10_20.csv"
+        finesample_df = test_enhancedsample(inplist, pfsampler, 18, [10, 20], 3, 3, fname)
+        finesample_df.to_csv(fname)
+        
+        fname = "output/hparam_explore3/enhsamp10_20_30.csv"
+        finesample_df = test_enhancedsample(inplist, pfsampler, 18, [10, 20, 30], 3, 3, fname)
+        finesample_df.to_csv(fname)
     
     """
     
