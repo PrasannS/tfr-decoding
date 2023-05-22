@@ -2,6 +2,8 @@ output/
 .ipynb_checkpoints/
 *.out
 *.csv
+*.jsonl
+*.pyc
 tmp_data/
 Topical-Chat/
 UniEval/

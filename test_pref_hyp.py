@@ -15,7 +15,8 @@ elidf = pd.read_json("output/elidataset.jsonl", orient="records", lines="true")
 # 31500 for P3
 # 50000 for P4
 # 65000 for P5
-elidf = elidf.drop_duplicates(subset="history").iloc[65000:]
+# 70000 for P6
+elidf = elidf.drop_duplicates(subset="history").iloc[70000:]
 
 
 # get shp model
