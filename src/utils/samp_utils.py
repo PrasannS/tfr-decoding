@@ -302,7 +302,7 @@ def dset_randsamp(datadf, tok, mod, stmtok, stmshp, rchoose, tsamps, temp, resam
             # save progress every 10 samples
             if i%20==0:
                 tmp = pd.DataFrame(allvals)
-                tmp.to_json("output/biggerdset2.jsonl", orient="records", lines=True)
+                tmp.to_json("output/biggerdset6.jsonl", orient="records", lines=True)
             
             #sampfrominp(datadf, tok, mod, stmtok, stmshp, i, 0, inps, [-1], rchoose, tsamps, temp)
             #tmp = pd.DataFrame(allvals)

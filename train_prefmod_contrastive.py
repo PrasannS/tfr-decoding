@@ -99,7 +99,6 @@ class T5BinaryClassifier(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         try: 
-            
             input_ids, attention_mask, labels = batch
         
             outputs, features = self(input_ids, attention_mask, labels)
@@ -109,7 +108,7 @@ class T5BinaryClassifier(pl.LightningModule):
             # run contrastive loss on each item in group
             for i in range(batch_size):
                 contrastive_loss = contrastive_loss+self.contrastive_loss(features[i*GSIZE:(i+1)*GSIZE, :], labels[i*GSIZE:(i+1)*GSIZE])
-            total_loss = loss + 3*contrastive_loss
+            total_loss = loss + contrastive_loss
             self.log('train_loss', total_loss)
             self.log('contrastive_loss', contrastive_loss)
             return total_loss
@@ -155,35 +154,47 @@ def train(dataframe, model_name='t5-small', epochs=2, batch_size=8, learning_rat
     # Balance DataFrame and split into train and test
     #dataframe = balance_dataframe(dataframe)
     #train_df, test_df = train_val_split(dataframe)
-    #test_df.to_json("pftest.jsonl", lines=True, orient="records")
-    #train_df.to_json("pftrain.jsonl", lines=True, orient="records")
-    test_df = pd.read_json("pftest.jsonl", lines=True, orient="records")
-    train_df = pd.read_json("pftrain.jsonl", lines=True, orient="records")
+    #test_df.to_json("pftest2.jsonl", lines=True, orient="records")
+    #train_df.to_json("pftrain2.jsonl", lines=True, orient="records")
+    test_df = pd.read_json("output/testsetlarge.jsonl", lines=True, orient="records")
+    # crafted to not include stuff from earlier training
+    train_df = pd.read_json("output/trainsetlarge.jsonl", lines=True, orient="records")
+    print("TRAIN SET SIZE IS ", len(train_df))
 
     tokenizer = T5Tokenizer.from_pretrained(model_name)
+    # even number of batches per device?
+    train_df= train_df.iloc[:int(len(train_df)/24)*24]
+    test_df = test_df.iloc[:int(len(test_df)/24)*24]
     train_dataset = CustomDataset(train_df, tokenizer, max_len)
     test_dataset = CustomDataset(test_df, tokenizer, max_len)
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=12, collate_fn=custom_collate)
-    val_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=12, collate_fn=custom_collate)
+    
+    print(len(train_dataset))
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=6, collate_fn=custom_collate)
+    print(len(train_loader))
+    val_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=0, collate_fn=custom_collate)
 
     
-    model = T5BinaryClassifier(model_name, tokenizer, learning_rate, max_len)
+    # model = T5BinaryClassifier(model_name, learning_rate, max_len)
+    model = T5BinaryClassifier.load_from_checkpoint('lightning_logs/bestmodel2/checkpoints/epoch=2-step=36436.ckpt')
     print(torch.cuda.device_count())
+    print(epochs)
     trainer = pl.Trainer(
-        max_epochs=epochs,
+        max_epochs=epochs+1,
+        min_epochs=epochs,
         strategy = DDPStrategy(find_unused_parameters=False),
         accelerator = 'gpu',
-        devices = 2,
+        devices = -1,
         log_every_n_steps=1,
         #check_val_every_n_epoch=val_interval,
         val_check_interval=0.1,
         #find_unused_parameters=False,
         #callbacks=[checkpoint_callback],
         enable_checkpointing=True,
+        #fast_dev_run=True,
         #precision=16,
         gradient_clip_val=1.0,  # Optional: gradient clipping
-        resume_from_checkpoint='lightning_logs/version_3/checkpoints/epoch=0-step=1844.ckpt',
+        #resume_from_checkpoint=,
+        
         #early_stop_callback=None
     )
     trainer.fit(model, train_loader, val_loader)
@@ -210,7 +221,7 @@ def custom_collate(original_batch):
 
 if __name__=="__main__":
     # Replace with your actual DataFrame
-    inpdf = pd.read_json("output/prefmetricdataset.jsonl", lines=True, orient="records")
+    inpdf = pd.read_json("output/largerpfmdataset.jsonl", lines=True, orient="records")
 
 
     # Train the model

@@ -202,10 +202,10 @@ def sample(
             if pred==0:
                 prob = 1-prob
             goodrecord.append(prob) 
-        
+        flag = False
         # we need to do prefix sampling check
         if input_ids.shape[1]%CHECKS[cind]==0:
-            
+            print("here")
             # we're good to keep sampling
             if max(goodrecord[-1*cont_checks:])>CTHRESH or resamps>=self.max_resamps: # TODO set this in call as well
                 cind = cind+1
@@ -223,7 +223,7 @@ def sample(
         model_kwargs = self._update_model_kwargs_for_generation(
             outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
         )
-
+            
         # if eos_token was found in one sentence, set sentence to finished
         if eos_token_id is not None:
             unfinished_sequences = unfinished_sequences.mul((sum(next_tokens != i for i in eos_token_id)).long())
