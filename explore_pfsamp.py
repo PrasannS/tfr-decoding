@@ -6,11 +6,11 @@ import numpy as np
 from src.tfr_decoding.finepref_sample import sample # new sampling method
 from src.utils.samp_utils import inpsampall, dset_randsamp   
 from src.tfr_decoding.shp_modeling import T5BinaryClassifier
-from prefix_sampling import PrefixSampler, test_baseline, test_pfsample, test_finesample, test_apsample
+from prefix_sampling import PrefixSampler, test_baseline, test_pfsample, test_finesample, test_apsample, test_enhancedsample
 
 # first load relevant models
 device = 'cuda:0' # if you have a GPU
-pfmod_path = "./lightning_logs/version_4/checkpoints/epoch=2-step=23950.ckpt"
+pfmod_path = "./lightning_logs/bestmodel/checkpoints/epoch=2-step=23950.ckpt"
 
 # get generation model
 tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-xxl")
@@ -52,6 +52,17 @@ with torch.no_grad():
     #finesample_df = test_baseline(inplist, pfsampler, .85, 1, fname)
     #finesample_df.to_json(fname, orient="records", lines=True)
     
+    with torch.no_grad():
+        fname = "output/hparam_explore2/enhsamp7_20.jsonl"
+        finesample_df = test_enhancedsample(inplist, pfsampler, 18, [7, 20], 3, 3, fname)
+        finesample_df.to_json(fname, orient="records", lines=True)
+        
+        fname = "output/hparam_explore2/enhsamp7_20_30.jsonl"
+        finesample_df = test_enhancedsample(inplist, pfsampler, 18, [7, 20, 30], 3, 3, fname)
+        finesample_df.to_json(fname, orient="records", lines=True)
+    
+    """
+    
     fname = "output/hparam_explore2/base2.jsonl"
     finesample_df = test_baseline(inplist, pfsampler, .85, 2, fname)
     finesample_df.to_json(fname, orient="records", lines=True)
@@ -68,7 +79,6 @@ with torch.no_grad():
     finesample_df = test_baseline(inplist, pfsampler, .85, 4, fname)
     finesample_df.to_json(fname, orient="records", lines=True)
     
-    """
     fname = "output/hparam_explore2/pfsamp_5_20.jsonl"
     finesample_df = test_pfsample(inplist, pfsampler, 18, [5, 20], fname)
     finesample_df.to_json(fname, orient="records", lines=True)

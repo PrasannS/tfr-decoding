@@ -6,6 +6,7 @@ import numpy as np
 from src.tfr_decoding.prefix_sample import sample as naivesample# new sampling method
 from src.tfr_decoding.finepref_sample import sample as fpsample
 from src.tfr_decoding.adapt_pfsample import sample as apsample
+from src.tfr_decoding.naive_plus_sample_old import sample as ensample
 from src.utils.samp_utils import inpsampall, dset_randsamp   
 from src.tfr_decoding.shp_modeling import T5BinaryClassifier
 
@@ -109,15 +110,15 @@ class PrefixSampler():
     
     # do prefix sampling following algorithm defined from before
     def do_enhanced_sample(self, source, max_resamps=6, checks=[15], rec_n=3, cont_checks=3):
-        self.mod.sample = naivesample.__get__(self.mod)
+        self.mod.sample = ensample.__get__(self.mod)
         self.mod.source_str = source
         # once we hit max_resamps, then just decode to end with what we have (TODO might need a better baseline?)
         self.mod.max_resamps = max_resamps
         # checkpoint # of tokens 
         self.mod.checklist = checks
         # how frequently to get checkpoints
-        self.mod.rec_n = 3
-        self.mod.cont_checks = 3
+        self.mod.rec_n = rec_n
+        self.mod.cont_checks = cont_checks
         _, outs, _ = self.gen_row(source)
         score = self.get_reward_single({'context':source, 'hyp':outs[0]})
         dectoks = self.mod.decoded_toks
@@ -154,7 +155,7 @@ def test_baseline(inplist, pfsampler, thresh, rounds, fname):
             allouts.append(outs[best_ind])
             abudgets.append(tot_toks)
             
-            if ((len(abudgets)+1)%SAVEINT)==0:
+            if ((len(abudgets)+1)%SAVEINT)==0 and fname is not None:
                 tmp = pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
                 tmp.to_json(fname, orient="records", lines=True)
         except:
@@ -179,7 +180,7 @@ def test_apsample(inplist, pfsampler, thresh, rounds, decay, rec_n, fname):
             allouts.append(outs[best_ind])
             abudgets.append(tot_toks)
             
-            if ((len(abudgets)+1)%SAVEINT)==0:
+            if ((len(abudgets)+1)%SAVEINT)==0 and fname is not None:
                 tmp = pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
                 tmp.to_json(fname, orient="records", lines=True)
         except:
@@ -198,7 +199,7 @@ def test_pfsample(inplist, pfsampler, max_resamps, checks, fname):
             ascos.append(score)
             allouts.append(out)
             abudgets.append(dectoks)
-            if ((len(abudgets)+1)%SAVEINT)==0:
+            if ((len(abudgets)+1)%SAVEINT)==0 and fname is not None:
                 tmp = pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
                 tmp.to_json(fname, orient="records", lines=True)
         except:
@@ -207,18 +208,29 @@ def test_pfsample(inplist, pfsampler, max_resamps, checks, fname):
             abudgets.append(-1)
     return pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
 
-def test_enhancedsample(inplist, pfsampler, max_resamps, checks, rec_n, cont_checks):
+def test_enhancedsample(inplist, pfsampler, max_resamps, checks, rec_n, cont_checks, fname):
     ascos = []
     abudgets = []
     allouts = []
     for inp in inplist:
-        out, score, dectoks = pfsampler.do_prefix_sample(inp, max_resamps, checks, rec_n, cont_checks)
+        # try:
+        out, score, dectoks = pfsampler.do_enhanced_sample(inp, max_resamps, checks, rec_n, cont_checks)
+        print(dectoks)
+        print(score)
         ascos.append(score)
         allouts.append(out)
         abudgets.append(dectoks)
+        if ((len(abudgets)+1)%SAVEINT)==0 and fname is not None:
+            tmp = pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
+            tmp.to_json(fname, orient="records", lines=True)
+        # except:
+            
+        #     ascos.append(0)
+        #     allouts.append("")
+        #     abudgets.append(-1)
     return pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
 
-def test_finesample(inplist, pfsampler, max_resamps, rec_n = 3, check_n = 3, cont_len = 5):
+def test_finesample(inplist, pfsampler, max_resamps, rec_n = 3, check_n = 3, cont_len = 5, fname=None):
     ascos = []
     abudgets = []
     allouts = []
@@ -229,7 +241,7 @@ def test_finesample(inplist, pfsampler, max_resamps, rec_n = 3, check_n = 3, con
             allouts.append(out)
             abudgets.append(dectoks)
             print(score)
-            if ((len(abudgets)+1)%SAVEINT)==0:
+            if ((len(abudgets)+1)%SAVEINT)==0 and fname is not None:
                 tmp = pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
                 tmp.to_json(fname, orient="records", lines=True)
         except:
