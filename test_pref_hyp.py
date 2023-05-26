@@ -57,8 +57,8 @@ tsamps = [4]
 #isall = inpsampall(elidf.iloc[:100], tokenizer, model, steamtok, steamshp, None, pflen, rchoose, tsamps, 0, 0.9)
 #isall = inpsampall(elidf.iloc[:100], tokenizer, model, steamtok, steamshp, None, [.3, -1], rchoose, tsamps, 0, 0.9)
 with torch.no_grad():
-    exsamp = dset_randsamp(elidf, tokenizer, model, steamtok, steamshp, rchoose, tsamps, 0.9, "set1.jsonl")
-    exsamp = dset_randsamp(elidf, tokenizer, model, steamtok, steamshp, rchoose, tsamps, 0.9, "set2.jsonl")
+    exsamp = dset_randsamp(elidf, tokenizer, model, steamtok, steamshp, rchoose, tsamps, 0.9, False, "testset1.jsonl")
+    exsamp = dset_randsamp(elidf, tokenizer, model, steamtok, steamshp, rchoose, tsamps, 0.9, False, "testset2.jsonl")
 #isall = inpsampall(inpsall.iloc[:50], pflen, rchoose, tsamps, 1, .9)
 #isall = inpsampall(inpsall.iloc[:50], pflen, rchoose, tsamps, 2, .9)
 #isall = inpsampall(inpsall.iloc[:50], pflen, rchoose, tsamps, 3, .9)

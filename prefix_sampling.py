@@ -6,9 +6,12 @@ import numpy as np
 from src.tfr_decoding.prefix_sample import sample as naivesample# new sampling method
 from src.tfr_decoding.finepref_sample import sample as fpsample
 from src.tfr_decoding.adapt_pfsample import sample as apsample
-from src.tfr_decoding.naive_plus_sample_old import sample as ensample
+from src.tfr_decoding.naive_plus_sample import sample as ensample
 from src.utils.samp_utils import inpsampall, dset_randsamp   
 from src.tfr_decoding.shp_modeling import T5BinaryClassifier
+
+import sys
+sys.setrecursionlimit(1500) # this number can be any limit
 
 
 class PrefixSampler():
@@ -109,7 +112,7 @@ class PrefixSampler():
         return outs[0], float(score), dectoks
     
     # do prefix sampling following algorithm defined from before
-    def do_enhanced_sample(self, source, max_resamps=6, checks=[15], rec_n=3, cont_checks=3):
+    def do_enhanced_sample(self, source, max_resamps=6, checks=[15], rec_n=3, cont_checks=3, c_thresh=0.75, t_thresh=0.85, asampmax=3):
         self.mod.sample = ensample.__get__(self.mod)
         self.mod.source_str = source
         # once we hit max_resamps, then just decode to end with what we have (TODO might need a better baseline?)
@@ -123,7 +126,10 @@ class PrefixSampler():
         score = self.get_reward_single({'context':source, 'hyp':outs[0]})
         dectoks = self.mod.decoded_toks
         self.mod.decoded_toks = 0
-        return outs[0], float(score), dectoks
+        self.mod.c_thresh = c_thresh # conf thresh
+        self.mod.t_thresh = t_thresh # for adaptive fallback
+        self.mod.asampmax = asampmax # how much to go for adaptive sampling
+        return outs[0], float(score), dectoks, self.mod.allstrs, self.mod.allscos
     
     def do_fine_sample(self, source, max_resamps, rec_n = 3, check_n = 3, cont_len = 5):
 
@@ -208,27 +214,32 @@ def test_pfsample(inplist, pfsampler, max_resamps, checks, fname):
             abudgets.append(-1)
     return pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
 
-def test_enhancedsample(inplist, pfsampler, max_resamps, checks, rec_n, cont_checks, fname):
+def test_enhancedsample(inplist, pfsampler, max_resamps, checks, rec_n, cont_checks, c_thresh, t_thresh, asampmax, fname):
     ascos = []
     abudgets = []
     allouts = []
+    a_ascos = []
+    a_astrs = []
     for inp in inplist:
-        # try:
-        out, score, dectoks = pfsampler.do_enhanced_sample(inp, max_resamps, checks, rec_n, cont_checks)
-        print(dectoks)
-        print(score)
-        ascos.append(score)
-        allouts.append(out)
-        abudgets.append(dectoks)
-        if ((len(abudgets)+1)%SAVEINT)==0 and fname is not None:
-            tmp = pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
-            tmp.to_json(fname, orient="records", lines=True)
-        # except:
-            
-        #     ascos.append(0)
-        #     allouts.append("")
-        #     abudgets.append(-1)
-    return pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts})
+        try:
+            out, score, dectoks, ast, asc = pfsampler.do_enhanced_sample(inp, max_resamps, checks, rec_n, cont_checks, c_thresh, t_thresh, asampmax)
+            a_ascos.append(asc)
+            a_astrs.append(ast)
+            print(dectoks)
+            print(score)
+            ascos.append(score)
+            allouts.append(out)
+            abudgets.append(dectoks)
+            if ((len(abudgets)+1)%SAVEINT)==0 and fname is not None:
+                tmp = pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts, "allscos":a_ascos, "allstrs":a_astrs})
+                tmp.to_csv(fname)
+        except:
+            print("something wrong")
+            ascos.append(0)
+            allouts.append("")
+            abudgets.append(-1)
+            torch.cuda.empty_cache()
+    return pd.DataFrame({"scos":ascos, "budgets":abudgets, "outs":allouts, "allscos":a_ascos, "allstrs":a_astrs})
 
 def test_finesample(inplist, pfsampler, max_resamps, rec_n = 3, check_n = 3, cont_len = 5, fname=None):
     ascos = []
