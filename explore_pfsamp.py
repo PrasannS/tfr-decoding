@@ -35,7 +35,7 @@ model.eval()
 # load up our dataset
 elidf = pd.read_json("output/elidataset.jsonl", orient="records", lines="true")
 # start from 15000 for latest exploration
-elidf = elidf.drop_duplicates(subset="history").iloc[15000:15600]
+elidf = elidf.drop_duplicates(subset="history").iloc[15000:15300]
 
 pfsampler = PrefixSampler(model)
 inplist = list(elidf['history'])
@@ -53,16 +53,56 @@ with torch.no_grad():
     #finesample_df.to_json(fname, orient="records", lines=True)
     
     with torch.no_grad():
-        fname = "output/hparam_explore3/enhsamp7_20.csv"
-        finesample_df = test_enhancedsample(inplist, pfsampler, 18, [7, 20], 3, 3, fname)
+        #fname = "output/hparam_explore4/enhsamp5_20v2.csv"
+        #finesample_df = test_enhancedsample(inplist, pfsampler, 18, [5, 20], 3, 1, .5, .8, 2, fname)
+        #finesample_df.to_csv(fname)
+        
+        # fname = "output/hparam_explore4/enhsamp5_20_30v2.csv"
+        # finesample_df = test_enhancedsample(inplist, pfsampler, 18, [5, 20, 30], 3, 1, .7, .8, 2, fname)
+        # finesample_df.to_csv(fname)
+        
+        # fname = "output/hparam_explore4/enhsamp5_20_30vpt7.csv"
+        # finesample_df = test_enhancedsample(inplist, pfsampler, 18, [5, 20, 30], 3, 1, .7, .8, 3, fname)
+        # finesample_df.to_csv(fname)
+        
+        # fname = "output/hparam_explore4/enhsamp5_20_30vpt7.csv"
+        # finesample_df = test_enhancedsample(inplist, pfsampler, 18, [5, 20, 30], 3, 1, .7, .8, 3, fname)
+        # finesample_df.to_csv(fname)
+        
+        # fname = "output/hparam_explore5/enhsamp5_14_25vpt7.csv"
+        # finesample_df = test_enhancedsample(inplist, pfsampler, 18, [5, 14, 25], 3, 1, .7, .8, 4, fname)
+        # finesample_df.to_csv(fname)
+        
+        #fname = "output/hparam_explore5/enhsamp5_14_25_35vpt7.csv"
+        #finesample_df = test_enhancedsample(inplist, pfsampler, 18, [5, 14, 25, 35], 3, 1, .7, .8, 4, fname)
+        #finesample_df.to_csv(fname)
+        
+        #fname = "output/hparam_explore5/enhsamp5_14_25vpt4.csv"
+        #finesample_df = test_enhancedsample(inplist, pfsampler, 18, [5, 14, 25], 3, 1, .4, .8, 4, fname)
+        #finesample_df.to_csv(fname)
+        
+        fname = "output/hparam_explore5/enhsamp20_30_40vpt5c2.csv"
+        finesample_df = test_enhancedsample(inplist, pfsampler, 14, [20, 30, 40], 3, 2, .5, .8, 4, fname)
         finesample_df.to_csv(fname)
         
-        fname = "output/hparam_explore3/enhsamp10_20.csv"
-        finesample_df = test_enhancedsample(inplist, pfsampler, 18, [10, 20], 3, 3, fname)
+        fname = "output/hparam_explore5/enhsamp5_14_25_35vpt75c2.csv"
+        finesample_df = test_enhancedsample(inplist, pfsampler, 14, [5, 14, 25, 35], 3, 2, .75, .8, 4, fname)
         finesample_df.to_csv(fname)
         
-        fname = "output/hparam_explore3/enhsamp10_20_30.csv"
-        finesample_df = test_enhancedsample(inplist, pfsampler, 18, [10, 20, 30], 3, 3, fname)
+        fname = "output/hparam_explore5/enhsamp5_14_25_35vpt5.csv"
+        finesample_df = test_enhancedsample(inplist, pfsampler, 18, [5, 14, 25, 35], 3, 1, .5, .8, 4, fname)
+        finesample_df.to_csv(fname)
+        
+        fname = "output/hparam_explore5/enhsamp25_35vpt75c2.csv"
+        finesample_df = test_enhancedsample(inplist, pfsampler, 14, [25, 35], 3, 2, .75, .8, 4, fname)
+        finesample_df.to_csv(fname)
+        
+        fname = "output/hparam_explore5/enhsamp5_14_25_35vpt3c2.csv"
+        finesample_df = test_enhancedsample(inplist, pfsampler, 14, [5, 14, 25, 35], 3, 2, .3, .8, 4, fname)
+        finesample_df.to_csv(fname)
+        
+        fname = "output/hparam_explore5/enhsamp25_35vpt3c2.csv"
+        finesample_df = test_enhancedsample(inplist, pfsampler, 14, [25, 35], 3, 2, .3, .8, 4, fname)
         finesample_df.to_csv(fname)
     
     """

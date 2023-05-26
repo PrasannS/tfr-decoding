@@ -4,6 +4,7 @@ output/
 *.csv
 *.jsonl
 *.pyc
+*.txt
 tmp_data/
 Topical-Chat/
 UniEval/

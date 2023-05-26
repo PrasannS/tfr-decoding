@@ -23,8 +23,7 @@ from transformers.generation.utils import SampleOutput, SampleDecoderOnlyOutput,
 
 logger = logging.get_logger(__name__)
 
-CTHRESH = 0.75
-TTHRESH = 0.85
+
 
 # score a single example (I don't think there's enough space to batch this?)
 def get_reward_single(self, inpdict):
@@ -108,6 +107,18 @@ def sample(
         CHECKS = [1, 10000]
         rec_n = 3
         cont_checks = 3
+        
+    if hasattr(self, "c_thresh"):
+        CTHRESH = self.c_thresh
+        TTHRESH = self.t_thresh
+        asampmax = self.asampmax
+    else:
+        CTHRESH = 0.75
+        TTHRESH = 0.85
+        asampmax = 4
+        
+    print(CTHRESH)
+    print(TTHRESH)
     
     cind = 1 # which checkpoint we're on
     resamps = 0 # how many times we've resampled (to manage budget)
@@ -121,7 +132,7 @@ def sample(
     #next_outstates = [] # to carry over  
     
     record = [] # record of adjusted probability so far
-    max_indiv_resamps = 8 # how much can we be stuck at single point
+    maxresamps = [0, 10, 5, 5, 5, 5]
     
     # keep track of which sequences are already finished
     unfinished_sequences = input_ids.new(input_ids.shape[0]).fill_(1)
@@ -132,6 +143,7 @@ def sample(
     fouts = []
     fscores = []
     fstrs=  []
+    startinps = input_ids
     # auto-regressive generation
     while True:
         if True: # allow vscode folding on this
@@ -233,20 +245,21 @@ def sample(
             # we're good to keep sampling
             if curprob>CTHRESH:
                 cind = cind+1
-                next_probs, next_inpids = [], []
             else:
                 print(cur_probs)
-                next_probs.append(curprob)
-                next_inpids.append(input_ids)
+                # only use stuff from beginning
+                if cind==1:
+                    next_probs.append(curprob)
+                    next_inpids.append(input_ids)
+                resamps = resamps+1
                 # we've been stuck at this checkpoint too much
-                if len(next_probs)==max_indiv_resamps:
+                if len(next_probs)==maxresamps[cind] or resamps==self.max_resamps:
                     cind = len(CHECKS)-1 # just switch to adaptive with what we have / ordered by prefix sampling
                     # manual starting points
                     cur_probs, cur_inpids = next_probs, next_inpids
-                    next_inpids, next_probs = [], []
-                
+                                
                 input_ids = input_ids[:, :CHECKS[cind-1]]
-                resamps = resamps+1
+                
                 if len(cur_probs)>0: # instead start from best scoring thing we left off with
                     nextind = int(np.argmax(cur_probs))
                     input_ids = cur_inpids.pop(nextind)
@@ -269,19 +282,23 @@ def sample(
             if unfinished_sequences.max() == 0 or stopping_criteria(input_ids, scores):
                 if not synced_gpus:
                     # treat this as adaptive baseline, TODO multi-gpu code not ready
-                    out = self.tokenizer.batch_decode(input_ids)[0]
+                    out = self.tokenizer.batch_decode(input_ids, skip_special_tokens=True)[0]
                     score = get_reward_single(self, {'context':source_str, 'hyp':out}).cpu()
                     fouts.append(input_ids)
-                    fscores.append(score)
+                    fscores.append(float(score))
                     fstrs.append(out)
                     print("adaptive, score ", score, " ", out)
                     # we don't need to sample anymore
                     if score>TTHRESH:
                         break
-                    if len(fscores)<4 and len(cur_probs)>0: # instead start from best scoring thing we left off with
-                        nextind = int(np.argmax(cur_probs))
-                        input_ids = cur_inpids.pop(nextind)
-                        cur_probs.pop(nextind)
+                    if len(fscores)<asampmax: # instead start from best scoring thing we left off with
+                        if len(cur_probs)>0: # if we have something from beginning use that
+                            nextind = int(np.argmax(cur_probs))
+                            input_ids = cur_inpids.pop(nextind)
+                            cur_probs.pop(nextind)
+                        else: # otherwise get something fresh
+                            input_ids = startinps
+                        # keep decoding running
                         unfinished_sequences = torch.tensor(1).to(self.device)
                     else:
                         break
