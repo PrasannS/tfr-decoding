@@ -73,8 +73,9 @@ class T5BinaryClassifier(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         input_ids, attention_mask, labels = batch['input_ids'], batch['attention_mask'], batch['label']
         logits = self(input_ids, attention_mask)
-        preds = torch.argmax(logits, dim=-1)
-        
+        #print(logits)
+        preds = logits[:, 1]
+        #print(preds)
         acc = accuracy_score(labels.cpu().numpy(), preds.cpu().numpy())
         # self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         #self.log("val_accuracy", acc, on_step=False, on_epoch=True, prog_bar=True)
@@ -175,19 +176,20 @@ def train(dataframe, model_name='t5-small', epochs=2, batch_size=8, learning_rat
     )
     trainer.fit(model, train_loader, val_loader, ckpt_path="./lightning_logs/version_3/checkpoints/epoch=0-step=2000.ckpt")
     
-def validate(dataframe, model_name='t5-small', epochs=2, batch_size=8, learning_rate=3e-5, max_len=512, val_interval=1):
+def validate(dataframe, ckpt_path, model_name='stanfordnlp/SteamSHP-flan-t5-large', epochs=2, batch_size=8, learning_rate=3e-5, max_len=512, val_interval=1):
 
     tokenizer = T5Tokenizer.from_pretrained(model_name)
     test_dataset = CustomDataset(dataframe, tokenizer, max_len)
 
     val_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=10)
 
-    
+
     model = T5BinaryClassifier(model_name, tokenizer, learning_rate, max_len)
 
 
     trainer = pl.Trainer(
         max_epochs=epochs,
+        devices=1,
         # gpus=torch.cuda.device_count(),
         log_every_n_steps=val_interval,
         #check_val_every_n_epoch=val_interval,
@@ -197,4 +199,6 @@ def validate(dataframe, model_name='t5-small', epochs=2, batch_size=8, learning_
         #early_stop_callback=None
     )
     #trainer.fit(model, train_loader, val_loader, ckpt_path="./lightning_logs/version_3/checkpoints/epoch=0-step=2000.ckpt")
-    trainer.validate(model, val_loader, ckpt_path="./lightning_logs/version_4/checkpoints/epoch=2-step=11896.ckpt")  
+    trainer.validate(model, val_loader, ckpt_path=ckpt_path)  
+    
+    return model.predictions, model.labels

@@ -67,6 +67,7 @@ class T5BinaryClassifier(pl.LightningModule):
             # train time
             
             return outputs, features.mean(dim=-2)
+            #return outputs, None
         else:
             # test time
             return self.model.generate(input_ids, attention_mask=attention_mask, max_new_tokens=2)
@@ -106,11 +107,12 @@ class T5BinaryClassifier(pl.LightningModule):
             contrastive_loss = 0
             batch_size = int(len(input_ids)/GSIZE)
             # run contrastive loss on each item in group
+            # TODO temporarily remove contrastive loss
             for i in range(batch_size):
-                contrastive_loss = contrastive_loss+self.contrastive_loss(features[i*GSIZE:(i+1)*GSIZE, :], labels[i*GSIZE:(i+1)*GSIZE])
+               contrastive_loss = contrastive_loss+self.contrastive_loss(features[i*GSIZE:(i+1)*GSIZE, :], labels[i*GSIZE:(i+1)*GSIZE])
             total_loss = loss + contrastive_loss
-            self.log('train_loss', total_loss)
-            self.log('contrastive_loss', contrastive_loss)
+            self.log('train_loss', total_loss, sync_dist=True)
+            self.log('contrastive_loss', contrastive_loss, sync_dist=True)
             return total_loss
         except:
             print("Strange issue occurred")
@@ -159,8 +161,9 @@ def train(dataframe, model_name='t5-small', epochs=2, batch_size=8, learning_rat
     test_df = pd.read_json("output/testsetlarge.jsonl", lines=True, orient="records")
     # crafted to not include stuff from earlier training
     train_df = pd.read_json("output/trainsetlarge.jsonl", lines=True, orient="records")
+    
     print("TRAIN SET SIZE IS ", len(train_df))
-
+    print(train_df['label'].iloc[:20])
     tokenizer = T5Tokenizer.from_pretrained(model_name)
     # even number of batches per device?
     train_df= train_df.iloc[:int(len(train_df)/24)*24]
@@ -174,7 +177,8 @@ def train(dataframe, model_name='t5-small', epochs=2, batch_size=8, learning_rat
     val_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=0, collate_fn=custom_collate)
 
     
-    # model = T5BinaryClassifier(model_name, learning_rate, max_len)
+    model = T5BinaryClassifier(model_name, learning_rate, max_len)
+    # contrastive model
     model = T5BinaryClassifier.load_from_checkpoint('lightning_logs/bestmodel2/checkpoints/epoch=2-step=36436.ckpt')
     print(torch.cuda.device_count())
     print(epochs)
@@ -194,7 +198,6 @@ def train(dataframe, model_name='t5-small', epochs=2, batch_size=8, learning_rat
         #precision=16,
         gradient_clip_val=1.0,  # Optional: gradient clipping
         #resume_from_checkpoint=,
-        
         #early_stop_callback=None
     )
     trainer.fit(model, train_loader, val_loader)
