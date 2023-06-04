@@ -61,7 +61,7 @@ class T5BinaryClassifier(pl.LightningModule):
             labels = labels.unsqueeze(-1)
             return self.model(input_ids, attention_mask=attention_mask, labels=labels)
         else:
-            return self.model.generate(input_ids, attention_mask=attention_mask, max_new_tokens=2)
+            return self.model.generate(input_ids, attention_mask=attention_mask, max_new_tokens=1)
 
     def training_step(self, batch, batch_idx):
         input_ids, attention_mask, labels = batch['input_ids'], batch['attention_mask'], batch['label']
@@ -99,7 +99,7 @@ class T5BinaryClassifier(pl.LightningModule):
             attention_mask = attention_mask.unsqueeze(0)
         
         
-        return self.model.generate(input_ids, attention_mask=attention_mask, max_new_tokens=2, return_dict_in_generate=logits,output_scores=logits)
+        return self.model.generate(input_ids, attention_mask=attention_mask, max_new_tokens=1, return_dict_in_generate=logits,output_scores=logits)
     
     # make input for prediction
     def getinp(self, inp, hyp):
