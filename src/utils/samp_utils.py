@@ -24,20 +24,28 @@ def get_reward_single(inpdict, steamtok, steamshp):
     outputs = steamshp.generate(x, return_dict_in_generate=True, output_scores=True, max_new_tokens=1)
     return torch.exp(outputs.scores[0][:, 71]) / torch.exp(outputs.scores[0][:,:]).sum(axis=1).item() # index 71 corresponds to the token for 'A'
 
+# score a single example (I don't think there's enough space to batch this?)
+def get_reward_double(inpdict, steamtok, steamshp):
+    template = "POST: {context:s} \n\nRESPONSE A:{hyp:s} \n\nRESPONSE B: {comp:s}\n\n Which response is better? RESPONSE "
+    inp = template.format(context=inpdict['context'], hyp=inpdict['hyp'], comp=inpdict['comp'])
+    x = steamtok([inp], return_tensors='pt').input_ids.to(steamshp.device)
+    outputs = steamshp.generate(x, return_dict_in_generate=True, output_scores=True, max_new_tokens=1)
+    return torch.exp(outputs.scores[0][:, 71]) / torch.exp(outputs.scores[0][:,:]).sum(axis=1).item() # index 71 corresponds to the 
+
 # generate output for an input row
-def gen_row(rw, tok, mod, method="greedy", num_hyps=10, temp=.9):
+def gen_row(rw, tok, mod, mintoks=20, method="greedy", num_hyps=10, temp=.9):
     input_text = construct_prompt(rw)
     
     #print(input_text)
     input_ids = tok(input_text, return_tensors="pt").input_ids.to(mod.device)
     if method=="greedy":
-        outputs = mod.generate(input_ids, min_new_tokens=20, max_new_tokens=200)
+        outputs = mod.generate(input_ids, min_new_tokens=mintoks, max_new_tokens=200)
         outs = [tok.decode(outputs[0], skip_special_tokens=True)]
     elif method=="sample": 
-        outputs = mod.generate(input_ids, min_new_tokens=20, max_new_tokens=300, do_sample=True, top_p=.95, temperature=temp, num_return_sequences=num_hyps, return_dict_in_generate=True, output_scores=True)
+        outputs = mod.generate(input_ids, min_new_tokens=mintoks, max_new_tokens=300, do_sample=True, top_p=.95, temperature=temp, num_return_sequences=num_hyps, return_dict_in_generate=True, output_scores=True)
         outs = [tok.decode(o, skip_special_tokens=True) for o in outputs.sequences]
     elif method=="beam":
-        outputs = mod.generate(input_ids, min_new_tokens=20, max_new_tokens=200, num_beams=num_hyps, num_return_sequences=num_hyps)
+        outputs = mod.generate(input_ids, min_new_tokens=mintoks, max_new_tokens=200, num_beams=num_hyps, num_return_sequences=num_hyps)
         outs = [tok.decode(o, skip_special_tokens=True) for o in outputs]
 
     return rw['history'], outs, outputs.scores
