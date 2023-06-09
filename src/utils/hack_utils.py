@@ -5,13 +5,14 @@ from nltk.tokenize import word_tokenize
 from collections import Counter
 from collections import defaultdict
 
+device="cuda:1"
+
+THRESH = -1
 def get_class(score):
-    if 0 <= score <= 0.85:
+    if score <= THRESH:
         return 0
-    elif 0.85 < score <= 1:
-        return 1
     else:
-        return None
+        return 1
 
 def competency_analysis(scos, hyps):
     # Put the scores into two classes
@@ -83,12 +84,38 @@ def modify_hyps(allscos, allhyps, allinps):
             result_dicts[-1]['inp'] = allinps[index]
     return result_dicts
 
+
+def getscore(q, a, rm, tok, bigmodel=True):
+    if bigmodel: 
+        input_text = "<|prompter|>"+q+"<|endoftext|><|assistant|>"+a+"<|endoftext|>"
+        inputs = tok(input_text, return_tensors="pt").to(device)
+    else:
+        inputs = tok(q, a, return_tensors='pt').to(device)
+    score = rm(**inputs).logits[0].cpu().detach()
+    return score
+
 # score output of above method
-def score_mhyp(mhyp, steamtok, steamshp):
+def score_mhyp(mhyp, steamtok, steamshp, isoa=False):
     resdict = {}
     for k in mhyp.keys():
         resdict[k] = mhyp[k]
         if '_' in k and "sco" not in k:
             #print(k)
-            resdict[k+"_score"] = float(get_reward_single({"context": mhyp['inp'], "hyp":mhyp[k]}, steamtok, steamshp))
+            if isoa:
+                resdict[k+"_score"] = float(getscore(mhyp['inp'], mhyp[k], steamshp, steamtok))
+            else:
+                resdict[k+"_score"] = float(get_reward_single({"context": mhyp['inp'], "hyp":mhyp[k]}, steamtok, steamshp))
     return resdict
+
+def flesch_kincaid(text):
+    num_sentences = len(re.findall(r'[.!?]+', text))
+    num_words = len(re.findall(r'\w+', text))
+    num_syllables = sum([len(re.findall(r'[aeiouy]+', word, re.IGNORECASE)) for word in re.findall(r'\w+', text)])
+
+    if num_sentences == 0 or num_words == 0:
+        
+        num_sentences=1
+        num_words = max(num_words, 1)
+
+    score = 206.835 - 1.015 * (num_words / num_sentences) - 84.6 * (num_syllables / num_words)
+    return score

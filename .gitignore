@@ -13,5 +13,7 @@ UnifiedSKG/
 exploring-T5/
 lightning_logs
 logs/
+llama/
+OpenAssistant/
 __pycache__
 .vscode
