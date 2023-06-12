@@ -15,5 +15,9 @@ lightning_logs
 logs/
 llama/
 OpenAssistant/
+alpaca_farm/
+apfarm_models/
+qlora_out/
+qlora/
 __pycache__
 .vscode
