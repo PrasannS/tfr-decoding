@@ -13,9 +13,11 @@ UnifiedSKG/
 exploring-T5/
 lightning_logs
 logs/
+llama/
+OpenAssistant/
 alpaca_farm/
 apfarm_models/
+qlora_out/
 qlora/
-llama/
 __pycache__
 .vscode
