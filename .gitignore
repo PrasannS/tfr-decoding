@@ -13,5 +13,9 @@ UnifiedSKG/
 exploring-T5/
 lightning_logs
 logs/
+alpaca_farm/
+apfarm_models/
+qlora/
+llama/
 __pycache__
 .vscode
