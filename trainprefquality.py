@@ -114,16 +114,6 @@ def train(dataframe, model_name='t5-small', epochs=2, batch_size=8, learning_rat
     
     model = T5BinaryClassifier(model_name, tokenizer, learning_rate, max_len)
 
-    checkpoint_callback = ModelCheckpoint(
-        dirpath="./checkpoints",
-        filename="{epoch:02d}-{val_accuracy:.4f}",
-        save_top_k=2,
-        monitor="val_accuracy",
-        mode="max",
-        save_last=True,
-        save_weights_only=False,
-        verbose=True,
-    )
     trainer = pl.Trainer(
         max_epochs=epochs,
         # gpus=torch.cuda.device_count(),

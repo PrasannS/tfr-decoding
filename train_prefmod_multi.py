@@ -11,6 +11,11 @@ from torch.nn.modules.distance import PairwiseDistance
 from pytorch_lightning.strategies.ddp import DDPStrategy
 from torch.nn.utils.rnn import pad_sequence
 
+
+from torch.autograd import Variable
+
+
+
 class CustomDataset(Dataset):
     def __init__(self, dataframe, tokenizer, max_len):
         self.data = dataframe
@@ -22,8 +27,8 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, index):
         row = self.data.iloc[index]
-        inp, hypa, hypb, label = row['inp'], row['hyp_a'], row['hyp_b'], row['label']
-        prompt = f'Does partial response A or B answer the question best?\n\n QUESTION: {inp} \n\n PARTIAL RESPONSE A: {hypa} \n\n PARTIAL RESPONSE B: {hypb}\n\n The better response is RESPONSE '
+        inp, hyp, label = row['inp'], row['hyp'], row['label']
+        prompt = f'We give the first few words of a partial response to the question. Will it answer the question well? \n\n Question: {inp} \n\n Partial Response: {hyp}\n\n Performance:'
 
         inputs = self.tokenizer(
             prompt,
@@ -55,7 +60,9 @@ class T5BinaryClassifier(pl.LightningModule):
                 
         if labels is not None:
             labels = labels.unsqueeze(-1)
+            #print("DEVICES", input_ids.requires_grad, )
             outputs = self.model(input_ids, attention_mask=attention_mask, labels=labels)
+            #print("got through outputs")
             #features = self.linear(outputs.encoder_last_hidden_state)
             # train time
             
@@ -67,15 +74,20 @@ class T5BinaryClassifier(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         input_ids, attention_mask, labels = batch
-        #if batch_idx==0:
-        #    print(self.tokenizer.batch_decode(input_ids))
+        
+        #input_ids = Variable(input_ids, requires_grad=True)
+        
+        if batch_idx==0:
+            print(self.tokenizer.batch_decode(input_ids))
         #try: 
             #input_ids, attention_mask, labels = batch
         
         outputs = self(input_ids, attention_mask, labels)
         loss = outputs.loss
+        #loss.requires_grad = True
 
-        self.log('train_loss', loss, sync_dist=True)
+        #print("got to loss")
+        self.log('train_loss', loss)
         return loss
         #except:
         #    print("Strange issue occurred")
@@ -102,12 +114,12 @@ class T5BinaryClassifier(pl.LightningModule):
 
 def train(dataframe, model_name='t5-small', epochs=2, batch_size=8, learning_rate=3e-5, max_len=512, val_interval=1):
     # Balance DataFrame and split into train and test
-    test_df = pd.read_json("output/testsetbalanced.jsonl", lines=True, orient="records")
+    test_df = pd.read_json("output/apfarm_ppo_test.jsonl", lines=True, orient="records")
     # crafted to not include stuff from earlier training
-    train_df = pd.read_json("output/trainsetbalanced.jsonl", lines=True, orient="records")
+    train_df = pd.read_json("output/apfarm_ppo_train.jsonl", lines=True, orient="records")
     
     print("TRAIN SET SIZE IS ", len(train_df))
-    print(train_df['label'].iloc[:20])
+    print(train_df['label'].iloc[:5])
     tokenizer = T5Tokenizer.from_pretrained(model_name)
     # even number of batches per device?
     train_df= train_df.iloc[:int(len(train_df)/24)*24]
@@ -116,12 +128,19 @@ def train(dataframe, model_name='t5-small', epochs=2, batch_size=8, learning_rat
     test_dataset = CustomDataset(test_df, tokenizer, max_len)
     
     print(len(train_dataset))
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=6, collate_fn=custom_collate)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=3, collate_fn=custom_collate)
     print(len(train_loader))
     val_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=0, collate_fn=custom_collate)
 
     
     model = T5BinaryClassifier(model_name, learning_rate, max_len)
+    
+    if hasattr(model, "enable_input_require_grads"):
+        model.enable_input_require_grads()
+    else:
+        def make_inputs_require_grad(module, input, output):
+            output.requires_grad_(True)
+
     # contrastive model
     # model = T5BinaryClassifier.load_from_checkpoint('lightning_logs/bestmodel2/checkpoints/epoch=2-step=36436.ckpt')
     print(torch.cuda.device_count())
@@ -129,7 +148,7 @@ def train(dataframe, model_name='t5-small', epochs=2, batch_size=8, learning_rat
     trainer = pl.Trainer(
         max_epochs=epochs+1,
         min_epochs=epochs,
-        #strategy = DDPStrategy(),
+        strategy = DDPStrategy(find_unused_parameters=False),
         accelerator = 'gpu',
         devices = -1,
         log_every_n_steps=1,
@@ -141,6 +160,7 @@ def train(dataframe, model_name='t5-small', epochs=2, batch_size=8, learning_rat
         #fast_dev_run=True,
         #precision=16,
         gradient_clip_val=1.0,  # Optional: gradient clipping
+        
         #resume_from_checkpoint=,
         #early_stop_callback=None
     )
@@ -163,7 +183,8 @@ def custom_collate(batch):
 if __name__=="__main__":
     # Replace with your actual DataFrame
     # inpdf = pd.read_json("output/largerpfmdataset.jsonl", lines=True, orient="records")
+    torch.set_grad_enabled(True)
 
 
     # Train the model
-    train(None, model_name='stanfordnlp/SteamSHP-flan-t5-large', epochs=4, batch_size=8, learning_rate=3e-5, val_interval=1)
+    train(None, model_name='google/flan-t5-large', epochs=4, batch_size=4, learning_rate=3e-5, val_interval=1)

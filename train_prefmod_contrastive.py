@@ -104,16 +104,16 @@ class T5BinaryClassifier(pl.LightningModule):
         
             outputs, features = self(input_ids, attention_mask, labels)
             loss = outputs.loss
-            contrastive_loss = 0
+            #contrastive_loss = 0
             batch_size = int(len(input_ids)/GSIZE)
             # run contrastive loss on each item in group
             # TODO temporarily remove contrastive loss
-            for i in range(batch_size):
-               contrastive_loss = contrastive_loss+self.contrastive_loss(features[i*GSIZE:(i+1)*GSIZE, :], labels[i*GSIZE:(i+1)*GSIZE])
-            total_loss = loss + contrastive_loss
-            self.log('train_loss', total_loss, sync_dist=True)
-            self.log('contrastive_loss', contrastive_loss, sync_dist=True)
-            return total_loss
+            #for i in range(batch_size):
+            #   contrastive_loss = contrastive_loss+self.contrastive_loss(features[i*GSIZE:(i+1)*GSIZE, :], labels[i*GSIZE:(i+1)*GSIZE])
+            #total_loss = loss + contrastive_loss
+            self.log('train_loss', loss, sync_dist=True)
+            # self.log('contrastive_loss', contrastive_loss, sync_dist=True)
+            return loss
         except:
             print("Strange issue occurred")
             return None
