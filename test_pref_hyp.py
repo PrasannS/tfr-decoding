@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 from src.tfr_decoding.custom_bs import beam_search
 from src.tfr_decoding.recurse_samp import sample
-from src.utils.samp_utils import inpsampall, dset_randsamp   
+from src.utils.samp_utils import inpsampall, dset_randsamp
 
 device = 'cuda:0' # if you have a GPU
 
@@ -16,7 +16,7 @@ elidf = pd.read_json("output/elidataset.jsonl", orient="records", lines="true")
 # 50000 for P4
 # 65000 for P5
 # 70000 for P6
-elidf = elidf.drop_duplicates(subset="history").iloc[15000:15600]
+elidf = elidf.drop_duplicates(subset="history").iloc[15000:15050]
 
 
 # get shp model
@@ -29,7 +29,6 @@ model = T5ForConditionalGeneration.from_pretrained("google/flan-t5-xxl", device_
 model.beam_search = beam_search.__get__(model)
 model.sample = sample.__get__(model)
 model.eval()
-
 
 #fulleli5 = load_dataset("eli5")
 #train = fulleli5['train_eli5']
@@ -57,8 +56,8 @@ tsamps = [4]
 #isall = inpsampall(elidf.iloc[:100], tokenizer, model, steamtok, steamshp, None, pflen, rchoose, tsamps, 0, 0.9)
 #isall = inpsampall(elidf.iloc[:100], tokenizer, model, steamtok, steamshp, None, [.3, -1], rchoose, tsamps, 0, 0.9)
 with torch.no_grad():
-    exsamp = dset_randsamp(elidf, tokenizer, model, steamtok, steamshp, rchoose, tsamps, 0.9, False, "testset1.jsonl")
-    exsamp = dset_randsamp(elidf, tokenizer, model, steamtok, steamshp, rchoose, tsamps, 0.9, False, "testset2.jsonl")
+    #exsamp = dset_randsamp(elidf, tokenizer, model, steamtok, steamshp, rchoose, tsamps, 0.9, False, "testset1.jsonl")
+    #exsamp = dset_randsamp(elidf, tokenizer, model, steamtok, steamshp, rchoose, tsamps, 0.9, False, "testset2.jsonl")
 #isall = inpsampall(inpsall.iloc[:50], pflen, rchoose, tsamps, 1, .9)
 #isall = inpsampall(inpsall.iloc[:50], pflen, rchoose, tsamps, 2, .9)
 #isall = inpsampall(inpsall.iloc[:50], pflen, rchoose, tsamps, 3, .9)
