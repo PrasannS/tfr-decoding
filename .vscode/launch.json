@@ -11,7 +11,7 @@
             "request": "attach",
             "connect": {
                 "host": "localhost",
-                "port": 5678
+                "port": 5679
             },
             "pathMappings": [
                 {
@@ -28,6 +28,33 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": false
-        }
+        },
+        {
+            "name": "PPODebug",
+            "type": "python",
+            "request": "launch",
+            "module": "accelerate.commands.launch",
+            "args": [
+            "--config_file=/home/prasann/Projects/tfr-decoding/alpaca_farm/examples/accelerate_configs/rlhf_ppo_fsdp_llama_4gpu.yaml",
+            "/home/prasann/Projects/tfr-decoding/alpaca_farm/examples/rlhf_ppo.py", "--run_name=ppo-tests",
+            "--step_per_device_batch_size=2", "--rollout_per_device_batch_size=32",
+            "--per_device_eval_batch_size=32",
+            "--output_dir=/home/prasann/Projects/tfr-decoding/alpaca_farm/ppotrain_out",
+            "--reward_model_name_or_path=/home/prasann/Projects/tfr-decoding/apfarm_models/reward-model-human",
+            "--policy_model_name_or_path=/home/prasann/Projects/tfr-decoding/apfarm_models/sft10k",
+            "--init_value_with_reward=True",
+            "--rollout_batch_size=256",
+            "--step_batch_size=128",
+            "--learning_rate=1e-5",
+            "--warmup_steps=5",
+            "--kl_coef=0.0002",
+            "--total_epochs=10",
+            "--flash_attn=True",
+            "--prompt_dict_path=/home/prasann/Projects/tfr-decoding/alpaca_farm/examples/prompts/v0_inputs_noinputs.json",
+            "--save_steps=40"], // other args comes after train.py
+            "console": "integratedTerminal",
+            "justMyCode": false
+            // "env": {"CUDA_LAUNCH_BLOCKING": "1"}
+          },
     ]
 }

@@ -40,7 +40,7 @@ class CustomDataset(Dataset):
         }
 
 class T5BinaryClassifier(pl.LightningModule):
-    def __init__(self, model_name='stanfordnlp/SteamSHP-flan-t5-large', learning_rate=3e-5, max_len=512, contmod=True):
+    def __init__(self, model_name='stanfordnlp/SteamSHP-flan-t5-large', learning_rate=3e-5, max_len=512, contmod=False):
         super().__init__()
 
         self.model = T5ForConditionalGeneration.from_pretrained(model_name)

@@ -21,3 +21,4 @@ qlora_out/
 qlora/
 __pycache__
 .vscode
+*/wandb
