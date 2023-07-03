@@ -1,0 +1,10 @@
+.vscode
+.ipynb_checkpoints
+oasst-pipeline/checkpoints 
+oasst-pipeline/wandb 
+llama-trl/checkpoints 
+llama-trl/wandb 
+trl-stack/checkpoints 
+trl-stack/wandb 
+trl-stack/models
+wandb

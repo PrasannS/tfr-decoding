@@ -42,7 +42,7 @@ def gen_row(rw, tok, mod, mintoks=20, method="greedy", num_hyps=10, temp=.9):
         outputs = mod.generate(input_ids, min_new_tokens=mintoks, max_new_tokens=200)
         outs = [tok.decode(outputs[0], skip_special_tokens=True)]
     elif method=="sample": 
-        outputs = mod.generate(input_ids, min_new_tokens=mintoks, max_new_tokens=300, do_sample=True, top_p=.95, temperature=temp, num_return_sequences=num_hyps, return_dict_in_generate=True, output_scores=True)
+        outputs = mod.generate(input_ids, min_new_tokens=mintoks, max_new_tokens=200, do_sample=True, top_p=.95, temperature=temp, num_return_sequences=num_hyps, return_dict_in_generate=True, output_scores=True)
         outs = [tok.decode(o, skip_special_tokens=True) for o in outputs.sequences]
     elif method=="beam":
         outputs = mod.generate(input_ids, min_new_tokens=mintoks, max_new_tokens=200, num_beams=num_hyps, num_return_sequences=num_hyps)
